@@ -4,7 +4,6 @@ include("../../FYP_Optimization-main/Base_Functions.jl")
 using .Base_Functions
 
 export domain_area
-export domain_expand
 export Domains_Problem
 export process
 
@@ -46,10 +45,6 @@ end
 
 function domain_area(cir::Circle)
     return pi*cir.R^2
-end
-
-function domain_expand(cir::Circle)
-    cir.R += 5
 end
 
 # for i in 1:10
