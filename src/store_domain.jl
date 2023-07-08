@@ -17,7 +17,17 @@ for i in 1: size(this_history.Domain_History,1)
     plot!(draw(this_cir,0.0,2*π),legend=:outertopright, aspect_ratio=1)
 end
 
-savefig("My_Repo/src/maps.pdf")
+anim = @animate for i in 1:size(this_history.Domain_History,1)
+    this_cir = this_history.Domain_History[i]
+    if i == 1
+        plot(draw(this_cir,0.0,2*π),legend=:outertopright, aspect_ratio=1)
+    else
+        plot!(draw(this_cir,0.0,2*π),legend=:outertopright, aspect_ratio=1)
+    end
+end
+gif(anim,fps=2)
+
+# savefig("My_Repo/src/maps.pdf")
 
 
 

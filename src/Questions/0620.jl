@@ -7,6 +7,10 @@ Plots.default(show = true) # shown in explorer
 x = range(0, 10, length=100)
 y = @. 100*sin(x) + x^2
 z = @. exp(x)
+f1 = plot(x,y)
+f2 = plot!(x,z)
+
+
 l = @layout [grid(4,1,heights=[0.1 ,0.4, 0.4, 0.1])]
 plot(x, [y,z], grid = false)
 plot(x, [y z], 
