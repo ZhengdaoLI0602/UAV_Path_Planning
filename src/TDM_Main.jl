@@ -10,7 +10,7 @@ include("TDM_Functions.jl")
 
 
 # Parameters settings
-M = 3 # 3 just for testing      # (user-defined) Total number of map updates 
+M = 8               # (user-defined) Total number of map updates 
 N = 5               # (user-defined) Total number of UAVs 
 R1 = 20             # (user-defined) Initial radius 
 ΔR = 2              # Expanding rate: 2m/update
@@ -57,7 +57,6 @@ cons_prog = []
 include("TDM_STATIC_opt.jl")
 
 
-M = 8
 r_min = 0 # for testing
 d_lim = 2 # (user-defined, should >2sqrt(3))for testing
 N_iter = 100 # (use-defined) set the limit of iterations for coverage maximization
@@ -68,34 +67,34 @@ output_pb_history = []
 TDM_history = []
 
 for k in 1: M 
-    # Initialize an array of the UAV group in this epoch
+    # I. Initialize an array of the UAV group in this epoch
     this_circle_group = [Base_Functions.Circle(0,0,0,[],[]) for i in 1:N]
 
-    # Maximize the union of circles, get the 2D positions and radius of UAVs
+    # II. Maximize the union of circles, get the 2D positions and radius of UAVs
     global STATIC_input = TDM_Functions.make_MADS(pre_optimized_circles)
     input_problem = Greens_Method.Greens_Problem(STATIC_input)
-    Plotter.Plot(input_problem,[30,30],"Input_$k") ## TEST PASSED
+    # Plotter.Plot(input_problem,[30,30],"Input_$k") ## TEST PASSED
 
-    # STATIC_output = TDM_STATIC_opt.optimize(STATIC_input, obj, cons_ext, cons_prog, N_iter, r_max, domain_x, domain_y)
+    # III. STATIC_output = TDM_STATIC_opt.optimize(STATIC_input, obj, cons_ext, cons_prog, N_iter, r_max, domain_x, domain_y)
     STATIC_output = TDM_STATIC_opt.optimize(STATIC_input, obj, cons_ext, cons_prog, N_iter, r_min, r_max, cir_domain)
     output_problem = Greens_Method.Greens_Problem(STATIC_output)
-    Plotter.Plot(output_problem,[30,30],"Output_$k") ## TEST PASSED
+    # Plotter.Plot(output_problem,[30,30],"Output_$k") ## TEST PASSED
 
-    # Update circle pools
+    # IV. Update circle pools
     post_optimized_circles = Base_Functions.make_circles(STATIC_output)
     global circles_pool = union(circles_pool, post_optimized_circles)
     # TDM_Functions.show_circles(circles_pool, cir_domain) # (optional) depict the circles configuration
 
-    # Store the information in each epoch
+    # V. Store the information in each epoch
     push!(input_pb_history, input_problem)
     push!(output_pb_history, output_problem)
     push!(TDM_history, cir_domain)
 
     if k!=M
-        # Update the map (substitude with Class functions later on)
+        # VI. Update the map (substitude with Class functions later on)
         global cir_domain = Base_Functions.Circle(0, 0, R1 + k * ΔR, [], [])
 
-        # Update the circles group variable
+        # VII. Update the circles group variable
         global pre_optimized_circles = post_optimized_circles
     end
 end
@@ -112,4 +111,8 @@ for i in eachindex(TDM_history)
     savefig(string)
 end
 
+TDM_Functions.show_circles(circles_pool, cir_domain)
+final_MADS = TDM_Functions.make_MADS(circles_pool)
+final_pb = Greens_Method.Greens_Problem(final_MADS)
+Plotter.Plot(final_pb,[50,50],"Final") ## TEST PASSED
 
