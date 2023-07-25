@@ -18,12 +18,30 @@ FOV = 80/180*π      # FOV in radians
 h_min = 5           # (user-defined, replaced later) Flying altitude lower bound (exclude initialization)
 h_max = 100         # Flying altitude upper bound
 r_min = h_min * tan(FOV/2) # (user-defined, replaced later)
+r_min = 0
 r_max = h_max * tan(FOV/2) 
 d_lim = 5           # (user-defined) limitations on displacement of group UAV induced from optimization 
 
 
+# Define objective (COPIED)
+function obj(x)
+    objective_circles = union(circles_pool, Base_Functions.make_circles(x))
+    objective_MADS = TDM_Functions.make_MADS(objective_circles)
+    my_problem = Greens_Method.Greens_Problem(objective_MADS)
+
+    return -my_problem.area
+end
+
+# Define extreme and progressive constraints
+include("TDM_Constraints.jl")
+cons_ext = [cons1, cons2,cons3]
+cons_prog = []
+
+# Main loop for change of domain and coverage optimization
+include("TDM_STATIC_opt.jl")
+
+
 # Initialize variables
-global circles_pool = []   # Initialize circle pool
 cir_domain = Base_Functions.Circle(0,0,R1,[],[])  # Initialize the time-dependent map (TDM)
 
 # Randomly allocate circles in the beginning
@@ -31,34 +49,11 @@ global STATIC_input = TDM_Functions.allocate_random_circles(cir_domain, N, r_max
 # TDM_Functions.show_circles(circles,cir_domain) # TEST PASSED
 circles = Base_Functions.make_circles(STATIC_input)
 
-global circles_pool = []
-circles_pool = union(circles_pool, circles)
+global circles_pool =  circles   # Initialize circle pool
 
 
-
-# # Define objective (COPIED)
-function obj(x)
-    objective_circles = union(circles_pool, Base_Functions.make_circles(x))
-    objective_MADS = TDM_Functions.make_MADS(objective_circles)
-    my_problem = Greens_Method.Greens_Problem(objective_MADS)
-
-    # my_problem = Greens_Method.Greens_Problem(x)
-
-    return -my_problem.area
-end
-
-# # Define extreme and progressive constraints
-include("TDM_Constraints.jl")
-cons_ext = [cons1, cons2, cons3]
-cons_prog = []
-
-
-# Main loop for change of domain and coverage optimization
-include("TDM_STATIC_opt.jl")
-
-
-r_min = 0 # for testing
-d_lim = 2 # (user-defined, should >2sqrt(3))for testing
+r_min = 0 # (copied) for testing
+d_lim = 5 # (copied)for testing
 N_iter = 100 # (use-defined) set the limit of iterations for coverage maximization
 global pre_optimized_circles = circles
 
@@ -68,7 +63,7 @@ TDM_history = []
 
 for k in 1: M 
     # I. Initialize an array of the UAV group in this epoch
-    this_circle_group = [Base_Functions.Circle(0,0,0,[],[]) for i in 1:N]
+    # this_circle_group = [Base_Functions.Circle(0,0,0,[],[]) for i in 1:N]
 
     # II. Maximize the union of circles, get the 2D positions and radius of UAVs
     global STATIC_input = TDM_Functions.make_MADS(pre_optimized_circles)
@@ -90,7 +85,7 @@ for k in 1: M
     push!(output_pb_history, output_problem)
     push!(TDM_history, cir_domain)
 
-    if k!=M
+    if k != M
         # VI. Update the map (substitude with Class functions later on)
         global cir_domain = Base_Functions.Circle(0, 0, R1 + k * ΔR, [], [])
 
@@ -105,14 +100,31 @@ end
 using Plots
 plotlyjs()
 
+
+# Show the locations of circles in each epoch
 for i in eachindex(TDM_history)
-    string = "TDM_Circles_$i"
-    TDM_Functions.show_circles(output_pb_history[i].circles, TDM_history[i])
+    string = "TDM_Circles_$i" 
+    TDM_Functions.show_circles(output_pb_history[i].circles, TDM_history[i]) 
     savefig(string)
 end
 
-TDM_Functions.show_circles(circles_pool, cir_domain)
+
+# Show the UAVs coverage from first epoch to the last
+for i in eachindex(TDM_history)
+    plot()
+    string = "TDM_Coverage_$i"
+    this_pool = circles_pool[1:5*i]
+    this_domain = TDM_history[i]
+    TDM_Functions.show_circles(this_pool, this_domain)
+    savefig(string)
+end
+
+
+# Plotting outline with domain boundary
 final_MADS = TDM_Functions.make_MADS(circles_pool)
 final_pb = Greens_Method.Greens_Problem(final_MADS)
-Plotter.Plot(final_pb,[50,50],"Final") ## TEST PASSED
+Plotter.Plot(final_pb,[70,70],"Final") ## TEST PASSED
+
+domain_x, domain_y = Base_Functions.draw(cir_domain, 0.0, 2π)
+plot!(domain_x, domain_y, aspect_ratio=1, legend=:outertopright, color = "red", linewidth = 5)
 

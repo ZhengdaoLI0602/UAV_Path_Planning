@@ -12,19 +12,23 @@ export make_MADS
 export allocate_random_circles
 
 function show_circles(circles, cir_domain)
+    # palette = ["blue", "orange", "green", "purple", "pink", "gray", "olive", "cyan"]
+    palette = ["blue", "orange", "green", "purple", "pink"]
+    # number of color = number of UAV
     for i in eachindex(circles)
+        this_color = palette[mod1(i,length(palette))]
         this_cir = circles[i]
         x,y = Base_Functions.draw(this_cir, 0.0, 2*π)
         if i==1
-            plot(x,y, aspect_ratio=1, legend=:outertopright)
+            plot(x,y, aspect_ratio=1, color = this_color, legend=:outertopright)
         else
-            plot!(x,y, aspect_ratio=1, legend=:outertopright)
+            plot!(x,y, aspect_ratio=1, color = this_color, legend=:outertopright)
         end
     end
 
     # Show the shape of domain
     domain_x, domain_y = Base_Functions.draw(cir_domain,0.0, 2π)
-    plot!(domain_x, domain_y, aspect_ratio=1, legend=:outertopright)
+    plot!(domain_x, domain_y, aspect_ratio=1, color="red", legend=:outertopright, linewidth = 5)
     # savefig("./circles_and_domain.pdf")
 end
 
