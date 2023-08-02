@@ -4,7 +4,7 @@ using Plots
 plotlyjs()
 Plots.default(show = true)
 using Random
-Random.seed!(123)
+Random.seed!(321)
 
 
 export show_circles
@@ -47,6 +47,7 @@ function make_MADS(circles)::Vector{Float64}  # <-> make_circles in "Base_Functi
 end
 
 function allocate_random_circles(cir_domain, N, r_max)
+    this_domain = cir_domain.Domain_History[end]
     # Generate circles
     x_arr = Vector{Float64}(undef,0)
     y_arr = Vector{Float64}(undef,0)
@@ -55,12 +56,12 @@ function allocate_random_circles(cir_domain, N, r_max)
     for i in 1:N
         # NOTE: A * rand() -> return float values in [0, A]
 
-        ref_dis = cir_domain.R *rand()
+        ref_dis = this_domain.R *rand()
         ref_angle = 2*π*rand()
         
         x = ref_dis * cos(ref_angle)
         y = ref_dis * sin(ref_angle)
-        r = min((cir_domain.R - ref_dis),r_max) * rand()
+        r = min((this_domain.R - ref_dis),r_max) * rand()
         
         push!(x_arr,x)
         push!(y_arr,y)

@@ -26,7 +26,7 @@ Optimize the problem using the Mesh Adaptive Direct Search solver
     - 'domain_x': x domain size
     - 'domain_y': y domain size
 """
-function optimize(input, obj, cons_ext, cons_prog, N_iter, r_min, r_max, cir_domain)
+function optimize(input, obj, cons_ext, cons_prog, N_iter, r_min, r_max)
 
     # Define optimization problem
     global p = DSProblem(length(input))
@@ -60,7 +60,7 @@ function optimize(input, obj, cons_ext, cons_prog, N_iter, r_min, r_max, cir_dom
         end
 
         # check if any circles are contained
-        var,new_input = check(result, r_min, r_max, cir_domain)
+        var,new_input = check(result, r_min, r_max)
 
         if var
             SetInitialPoint(p, new_input)
@@ -88,7 +88,7 @@ Checks if any Circle objects are contained by other circles, and regenerates the
     - 'domain_x': x domain size
     - 'domain_y': y domain size
 """
-function check(output, r_min, r_max, cir_domain)
+function check(output, r_min, r_max)
     output_circles = make_circles(output)
     N = length(output_circles)
 

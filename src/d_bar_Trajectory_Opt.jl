@@ -1,23 +1,14 @@
-module TDM_TRAJECTORY_opt
+module Trajectory_Optimization
 
 export Trajectory_Problem
-export converge
 export optimize
-export GreensPb_to_ALTRO
-export GreensPb_to_MADS
-export MADS_to_ALTRO
-export collide
-
-
+export optimize_20230802
 
 using TrajectoryOptimization
 using RobotDynamics
 using RobotZoo: Quadrotor
 using StaticArrays, Rotations, LinearAlgebra
 using Altro
-include("../../FYP_Optimization-main/Base_Functions.jl")
-include("TDM_Functions.jl")
-
 
 """
     struct Trajectory_Problem
@@ -59,8 +50,6 @@ mutable struct Trajectory_Problem
 
 end
 
-
-
 """
     converge(MAV::Trajectory_Problem)
 
@@ -75,38 +64,20 @@ function converge(MAV::Trajectory_Problem)
     return distance
 end
 
-"""
-    optimize(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, collision::Vector{Any})
 
-Performs a trajectory optimization of the MAV from StateHistory[end] (current state) to FinalState
+function optimize_20230802(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, Nm::Int64, collision::Vector{Any})
 
-# Arguments:
-    - 'tf::Float64': Time horizon
-    - 'Nt::Int64': Number of timesteps
-    - 'collision::Vector{Any}': Vector of form [Boolean,[x,y,z]], where the Boolean value describes if a collision is imminent with any other MAVs at the location (x,y,z)
-"""
+    x0 = SVector(MAV.StateHistory[end])
+    xf = SVector(MAV.FinalState)
 
-
-function optimize(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, Nm::Int64)
-    optimize(MAV, tf, Nt, Nm, [false,[]])
-end
-
-
-
-
-function optimize(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, Nm::Int64, collision::Vector{Any})
-
-    x0 = SVector(MAV.StateHistory[end])  # initial 3D positions of MAV
-    xf = SVector(MAV.FinalState)         # final 3D positions of MAV
-
-    n,m = size(MAV.Model) # n: number of states; m: number of control inputs
+    n,m = size(MAV.Model)
 
     # Initialize cost function
-    Q = Diagonal(@SVector fill(1., n))  # form n*n diagonal matrix filled with the number 1
-    R = Diagonal(@SVector fill(5., m))  # form m*m diagonal matrix filled with the number 5
-    H = @SMatrix zeros(m, n)  # form m*n matrix
+    Q = Diagonal(@SVector fill(1., n))
+    R = Diagonal(@SVector fill(5., m))
+    H = @SMatrix zeros(m, n)
     q = -Q*xf
-    r = @SVector zeros(m) # form m*1 vector
+    r = @SVector zeros(m)
     c = xf'*Q*xf/2
 
     cost = QuadraticCost(Q, R, H, q, r, c)
@@ -114,19 +85,15 @@ function optimize(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, Nm::Int64, co
     objective = Objective(cost, Nt)
 
     # Constraints
+    # cons1
     cons = ConstraintList(n, m, Nt)
-
-    # x_min = [-10.0,-10.0,0.0,-2.0,-2.0,-2.0,-2.0,-5.0,-5.0,-5.0,-1.5,-1.5,-1.5] 
-    # # target limits for different variables (positions; orientations; velocity; angular velocity)
-    # x_max = [60.0,60.0,15.0,2.0,2.0,2.0,2.0,5.0,5.0,5.0,1.5,1.5,1.5]
-
-    x_min = [-100.0,-100.0,0.0,-2.0,-2.0,-2.0,-2.0,-5.0,-5.0,-5.0,-1.5,-1.5,-1.5] 
-    # target limits for different variables (positions; orientations; velocity; angular velocity)
-    x_max = [100.0,100.0,100.0,2.0,2.0,2.0,2.0,5.0,5.0,5.0,1.5,1.5,1.5]
-
+    x_min = [-10.0,-10.0,0.0,-2.0,-2.0,-2.0,-2.0,-5.0,-5.0,-5.0,-1.5,-1.5,-1.5]
+    x_max = [60.0,60.0,15.0,2.0,2.0,2.0,2.0,5.0,5.0,5.0,1.5,1.5,1.5]
+    
+    # cons2
     add_constraint!(cons, BoundConstraint(n,m, x_min=x_min, x_max=x_max), 1:Nt-1)
 
-    # Add collision constraints if present
+    # cons3;  Add collision constraints if present
     if collision[1] == true
         x,y,z = collision[2]
         add_constraint!(cons, SphereConstraint(n, [x], [y], [z], [1.5]), 1:Nt)
@@ -147,7 +114,7 @@ function optimize(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, Nm::Int64, co
     hover = zeros(MAV.Model)[2]
 
     for i in 1:Nt-1
-        state_guess[:,i] = x0 + (xf-x0)*(i-1)/(Nt-1)   # assume linear interpolation
+        state_guess[:,i] = x0 + (xf-x0)*(i-1)/(Nt-1)   
         control_guess[:,i] = hover                     # 13 * number of (timesteps-1)
     end
 
@@ -157,10 +124,9 @@ function optimize(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, Nm::Int64, co
     initial_controls!(prob, control_guess)
     
     altro = ALTROSolver(prob)
-
     solve!(altro);
 
-    X = states(altro);
+    X = states(altro)
 
     MAV.PredictedStates = X
 
@@ -168,20 +134,97 @@ function optimize(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, Nm::Int64, co
         push!(MAV.StateHistory, X[i])
     end
 
-    return altro.stats.tsolve
+    return altro.stats.tsolve, cost, objective
 end
 
 
 
+"""
+    optimize(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, collision::Vector{Any})
 
-function GreensPb_to_ALTRO(GreensPb)
-    return MADS_to_ALTRO(GreensPb_to_MADS(GreensPb))
+Performs a trajectory optimization of the MAV from StateHistory[end] (current state) to FinalState
+
+# Arguments:
+    - 'tf::Float64': Time horizon
+    - 'Nt::Int64': Number of timesteps
+    - 'collision::Vector{Any}': Vector of form [Boolean,[x,y,z]], where the Boolean value describes if a collision is imminent with any other MAVs at the location (x,y,z)
+"""
+function optimize(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, Nm::Int64, collision::Vector{Any})
+
+    x0 = SVector(MAV.StateHistory[end])
+    xf = SVector(MAV.FinalState)
+
+    n,m = size(MAV.Model)
+
+    # Initialize cost function
+    Q = Diagonal(@SVector fill(1., n))
+    R = Diagonal(@SVector fill(5., m))
+    H = @SMatrix zeros(m, n)
+    q = -Q*xf
+    r = @SVector zeros(m)
+    c = xf'*Q*xf/2
+
+    cost = QuadraticCost(Q, R, H, q, r, c)
+
+    objective = Objective(cost, Nt)
+
+    # Constraints
+    # cons1
+    cons = ConstraintList(n, m, Nt)
+    x_min = [-10.0,-10.0,0.0,-2.0,-2.0,-2.0,-2.0,-5.0,-5.0,-5.0,-1.5,-1.5,-1.5]
+    x_max = [60.0,60.0,15.0,2.0,2.0,2.0,2.0,5.0,5.0,5.0,1.5,1.5,1.5]
+    
+    # cons2
+    add_constraint!(cons, BoundConstraint(n,m, x_min=x_min, x_max=x_max), 1:Nt-1)
+
+    # cons3;  Add collision constraints if present
+    if collision[1] == true
+        x,y,z = collision[2]
+        add_constraint!(cons, SphereConstraint(n, [x], [y], [z], [1.5]), 1:Nt)
+    end
+
+    # With random initial positions (with x0=x0)
+    # prob = Problem(MAV.Model, objective,  xf, tf, x0=x0, constraints=cons)
+    prob = Problem(MAV.Model, objective, x0, tf, xf = xf, constraints=cons)
+    # Without random initial positions (without x0)
+    # prob = Problem(MAV.Model, objective,  xf, tf, constraints=cons)
+    
+
+    # State initialization: linear trajectory from start to end
+    # Control initialization: hover
+    state_guess = zeros(Float64, (n,Nt))
+    control_guess = zeros(Float64, (m,Nt-1))
+
+    hover = zeros(MAV.Model)[2]
+
+    for i in 1:Nt-1
+        state_guess[:,i] = x0 + (xf-x0)*(i-1)/(Nt-1)   
+        control_guess[:,i] = hover                     # 13 * number of (timesteps-1)
+    end
+
+    state_guess[:,Nt] = xf                             # 13 * number of timesteps
+
+    initial_states!(prob, state_guess)
+    initial_controls!(prob, control_guess)
+    
+    altro = ALTROSolver(prob)
+    solve!(altro);
+
+    X = states(altro)
+
+    MAV.PredictedStates = X
+
+    for i in 2:Nm
+        push!(MAV.StateHistory, X[i])
+    end
+
+    return altro.stats.tsolve, cost, objective
 end
 
-function GreensPb_to_MADS(GreensPb)
-    cirs = GreensPb.circles
-    return TDM_Functions.make_MADS(cirs)
-end
+
+
+# for testing on 07.31
+
 
 """
     MADS_to_ALTRO(z::Vector{Float64})
@@ -190,7 +233,7 @@ Transforms our MADS data structure to the ALTRO data structure
 """
 function MADS_to_ALTRO(z::Vector{Float64})
     N = Int(length(z)/3)
-    FOV = 80/180*pi
+    FOV = pi/2
 
     x = Vector{RBState}()
     for i in range(1,stop=N)
@@ -198,10 +241,10 @@ function MADS_to_ALTRO(z::Vector{Float64})
         y_val = z[N + i]
         R_val = z[N*2 + i]
 
-        z_val = R_val/tan(FOV/2)
+        z_val = 2*R_val/FOV
 
-        push!(x, RBState([x_val, y_val, z_val], UnitQuaternion(I), zeros(3), zeros(3))); 
-        # positions(3), orientation(4), velocity(3), angular velocity(3) 
+        push!(x, RBState([x_val, y_val, z_val], UnitQuaternion(I), zeros(3), zeros(3)));
+        # 3D position, orientation, linear velocity, angular velocity 
     end
 
     return x
@@ -225,19 +268,3 @@ function collide(MAV1::Trajectory_Problem, MAV2::Trajectory_Problem, R_C::Float6
 end
 
 end # module end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
