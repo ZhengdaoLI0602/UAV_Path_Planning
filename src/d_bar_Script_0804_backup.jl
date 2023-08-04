@@ -26,8 +26,13 @@ r_max = 100 * tand(80/2)
 N = 5
 cir_domain = Circle_Domain.Domains_Problem([], 20.0, 2.0)
 global MADS_input = TDM_Functions.allocate_random_circles(cir_domain, N, r_max)
+# Obtain initial and final states for all drones (Got from Static optimization)
 x_start = Trajectory_Optimization.MADS_to_ALTRO(MADS_input) #----- testing on 0802 (with 5 UAVs in total)
+# x_final = Trajectory_Optimization.MADS_to_ALTRO(MADS_output)
 
+# for i in 1:N
+# push!(MAVs,Trajectory_Optimization.Trajectory_Problem(mass,J,gravity,motor_dist,kf,km,x_start[1],x_final[1]))
+# end
 
 # MPC optimization
 hor = 3.0           # Prediction horizon length         (3 seconds in total)
@@ -41,116 +46,45 @@ ind = 1
 
 
 MAVs = Vector{Trajectory_Optimization.Trajectory_Problem}() # ----- testing on just first UAV on 0802
-push!(MAVs, Trajectory_Optimization.Trajectory_Problem(mass, J, gravity, motor_dist, kf, km, x_start[ind]))
-MAV = MAVs[ind];
+push!(MAVs, Trajectory_Optimization.Trajectory_Problem(mass, J, gravity, motor_dist, kf, km, x_start[1]))
+n, m = size(MAVs[ind].Model)
+MAV = MAVs[1]
 
 
 #------------------------------------------------------------------------------------------------#
 # function optimize_20230801(MAV::Trajectory_Optimization.Trajectory_Problem, tf::Float64, Nt::Int64)
+    # delete Nm: not necessary
+    x0 = SVector(MAV.StateHistory[end])
+    # xf = SVector(MAV.FinalState)
+
+
+    # Initialize cost function
+    # Q = Diagonal(@SVector fill(1., n))
+    # R = Diagonal(@SVector fill(5., m))
+    # H = @SMatrix zeros(m, n)
+    # q = -Q*xf
+    # r = @SVector zeros(m)
+    # c = xf'*Q*xf/2
+
+    # cost = QuadraticCost(Q, R, H, q, r, c)  # change to (x[1:3] - x0[1:3]).^2
+    # objective = Objective(cost, Nt)
+
     # COPY from: https://docs.juliahub.com/TrajectoryOptimization/UVgeA/0.1.2/costfunctions.html ---- #
     # ------ Method 1
-n,m = size(MAV.Model)       # n: number of states 13; m: number of controls 4
-num_states = 13
-
-
-#-------------------------------------------------------------------- 20230804
-# model = DubinsCar()
-# n,m = size(model)    # get state and control dimension
-# N = 101              # number of time steps (knot points). Should be odd.
-# tf = 3.0             # total time (sec)
-# dt = tf / (N-1)      # time step (sec)
-
-# x0 = SA_F64[0,0,0]   # start at the origin
-x0 = SVector(MAV.StateHistory[end]) # CHANGE LATER!
-# xf = SA_F64[1,2,pi]  # goal state
-
-# Q  = Diagonal(SA[0.1,0.1,0.01])
-Q = Diagonal(@SVector fill(1e-8, num_states))
-# R  = Diagonal(SA[0.01, 0.1])
-R = Diagonal(@SVector fill(1e-8, m))
-# Qf = Diagonal(SA[1e2,1e2,1e3])
-Qf = Diagonal(@SVector fill(1.0, num_states))
-
-# obj = LQRObjective(Q,R,Qf,xf,N)
-obj = LQRObjective(Q,R,-Qf,x0,Nt)  # only about the 3D position
-
-# cons = []
-cons = ConstraintList(num_states,m,Nt)
-x_min = [-10.0,-10.0,0.0,  -2.0,-2.0,-2.0,-2.0,  -5.0,-5.0,-5.0,  -1.5,-1.5,-1.5]
-x_max = [60.0,60.0,15.0,  2.0,2.0,2.0,2.0,  5.0,5.0,5.0,  1.5,1.5,1.5]
-add_constraint!(cons, BoundConstraint(n, m, x_min=x_min, x_max=x_max), 1:Nt-1)
-# # Goal constraint
-# goal = GoalConstraint(xf)
-# add_constraint!(cons, goal, N)
-# # Workspace constraint
-# bnd = BoundConstraint(n,m, x_min=[-0.1,-0.1,-Inf], x_max=[5,5,Inf])
-# add_constraint!(cons, bnd, 1:N-1)
-# # Obstacle Constraint
-# obs = CircleConstraint(n, SA_F64[1,2], SA_F64[1,1], SA[0.2, 0.3])
-# add_constraint!(cons, bnd, 1:N-1)
-
-# prob = Problem(model, obj, xf, tf, x0=x0, constraints=cons, integration=RK4)
-prob = Problem(MAV.Model, obj, x0, hor, constraints=cons);
-
-
-# initial_controls!(prob, [@SVector rand(m) for k = 1:N-1])
-initial_controls!(prob, [@SVector rand(m) for k = 1:Nt-1])
-# rollout!(prob)   # simulate the system forward in time with the new controls
-rollout!(prob)   # simulate the system forward in time with the new controls
-
-solver = ALTROSolver(prob);
-
-# Create a solver, adding in additional options
-# opts = SolverOptions()
-# opts.cost_tolerance = 1e-5
-# solver = ALTROSolver(prob, opts, show_summary=false);
-
-solve!(solver);
-
-status(solver)
-println("Number of iterations: ", iterations(solver))
-println("Final cost: ", cost(solver))
-println("Final constraint satisfaction: ", max_violation(solver))
-
-X = states(solver) 
-
-
-
-#----------------------------------------------------------------------- 20230804
-using Plots
-
-# Static 3D plot
-p = plot(legend=:outertopright, minorgrid=true, minorgridalpha=0.25)
-
-traj_xs = zeros(31,3) 
-
-for i in eachindex(X)
-    traj_xs[i,1] = X[i][1]
-    traj_xs[i,2] = X[i][2]
-    traj_xs[i,3] = X[i][3]
-end
-
-plot!(traj_xs[:,1], traj_xs[:,2], traj_xs[:,3],  markershape=:none, xlims=(-20,20), ylims=(-20,20), zlims=(-20,20), xlabel="x (m)", ylabel="y (m)", zlabel="z (m)")
-
-
-using DelimitedFiles
-# Here numbers is a 2d array
-# numbers = rand(5, 5)
-# Since it is a comma separated file we need to,
-# to separate into a table of row and col
-writedlm("output.csv", traj_xs, ", ")
-
+    # n,m = 2,1
+    n,m = size(MAV.Model)       # n: number of states 13; m: number of controls 4
+    final_state_ind = 3
 
     # n = 3 # 3D positions
     # m = size(MAV.Model)[2]
 
     # Q = Diagonal(0.1I,n)
     # R = Diagonal(0.1I,m)
-    Q = Diagonal(@SVector fill(1.0, num_states))
+    Q = Diagonal(@SVector fill(1.0, final_state_ind))
     # Q = Diagonal(0.0I,n)#@SVector fill(0, n))#zeros(n,n);#
     R = Diagonal(@SVector fill(1.0, m))
     # R = Diagonal(0.0I,m)#@SVector fill(0, m))#zeros(m,m);#
-    Qf = Diagonal(@SVector fill(1.0, num_states))
+    Qf = Diagonal(@SVector fill(1.0, final_state_ind))
     # Qf = -Diagonal(1.0I,n)#@SVector fill(1.0, n)) #ones(n,n);#
     # xf = [π,0]
     xf = SVector(MAV.StateHistory[end]) # actually "x0"
@@ -160,8 +94,8 @@ writedlm("output.csv", traj_xs, ", ")
     objective = Objective(costfun, costfun_term, Nt)
 
     # -------- Method 2
-    psd_xf = xf[1:num_states]  # processed xf
-    H = zeros(m, num_states)
+    psd_xf = xf[1:final_state_ind]  # processed xf
+    H = zeros(m, final_state_ind)
     q = -Q * psd_xf 
     r = zeros(m)
     c = psd_xf' * Q * psd_xf/2
