@@ -98,7 +98,7 @@ function find_d_max(MAV, tf::Float64, Nf::Int64)
     n,m = size(MAV.Model)       # n: number of states 13; m: number of controls 4
     num_states = n
 
-    x0 = SVector(MAV.StateHistory[end]) # CHANGE LATER!
+    x0 = SVector(MAV.StateHistory[end]) 
     Q = Diagonal(@SVector fill(1e-10, num_states))
     R = Diagonal(@SVector fill(1e-10, m))
     Qf = Diagonal(@SVector fill(-1.0, num_states))
@@ -115,14 +115,16 @@ function find_d_max(MAV, tf::Float64, Nf::Int64)
 
     # zero_SV = zeros(MAV.Model)[1]
     # hover = zeros(MAV.Model)[2]
-    control_guess = zeros(Float64, (m,Nf-1))
     # hover = @SVector fill(-2*MAV.Model.gravity[3]*MAV.Model.mass/4.0, size(MAV.Model)[2])
+    control_guess = zeros(Float64, (m,Nf-1))
+    
 
     # state_guess = zeros(Float64, (num_states,Nf))
     # for i in 1:Nf-1  
     #     # state_guess[:,i] = zero_SV
     #     control_guess[:,i] = no_control                    # 13 * number of (timesteps-1)
     # end
+
     # initial_states!(prob, state_guess)
     initial_controls!(prob, control_guess)
 
@@ -132,9 +134,9 @@ function find_d_max(MAV, tf::Float64, Nf::Int64)
     solve!(solver);
 
     status(solver)
-    println("Number of iterations: ", iterations(solver))
-    println("Final cost: ", cost(solver))
-    println("Final constraint satisfaction: ", max_violation(solver))
+    # println("Number of iterations: ", iterations(solver))
+    # println("Final cost: ", cost(solver))
+    # println("Final constraint satisfaction: ", max_violation(solver))
 
     X = states(solver);
     return X
