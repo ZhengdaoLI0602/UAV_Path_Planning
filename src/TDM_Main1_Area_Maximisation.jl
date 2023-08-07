@@ -3,7 +3,7 @@ include("../../FYP_Optimization-main/Base_Functions.jl")
 include("../../FYP_Optimization-main/Greens_Method.jl")
 # using .Greens_Method
 include("../../FYP_Optimization-main/Plotter.jl")
-# using Random
+using Random
 Random.seed!(123)
 
 include("TDM_Functions.jl")
@@ -21,11 +21,11 @@ h_max = 100         # Flying altitude upper bound
 r_min = h_min * tan(FOV/2) # (user-defined, replaced later)
 r_min = 0
 r_max = h_max * tan(FOV/2) 
-d_lim = 5           # (user-defined) limitations on displacement of group UAV induced from optimization 
+d_lim = 35           # (user-defined) limitations on displacement of group UAV induced from optimization 
 
 
 # Define objective (COPIED)
-function obj(x)
+function obj_main1(x)
     objective_circles = union(circles_pool, Base_Functions.make_circles(x))
     objective_MADS = TDM_Functions.make_MADS(objective_circles)
     my_problem = Greens_Method.Greens_Problem(objective_MADS)
@@ -73,7 +73,7 @@ for k in 1: M
     # Plotter.Plot(input_problem,[30,30],"Input_$k") ## TEST PASSED
 
     # III. STATIC_output = TDM_STATIC_opt.optimize(STATIC_input, obj, cons_ext, cons_prog, N_iter, r_max, domain_x, domain_y)
-    STATIC_output = TDM_STATIC_opt.optimize(STATIC_input, obj, cons_ext, cons_prog, N_iter, r_min, r_max)
+    STATIC_output = TDM_STATIC_opt.optimize(STATIC_input, obj_main1, cons_ext, cons_prog, N_iter, r_min, r_max)
     output_problem = Greens_Method.Greens_Problem(STATIC_output)
     # Plotter.Plot(output_problem,[30,30],"Output_$k") ## TEST PASSED
 
