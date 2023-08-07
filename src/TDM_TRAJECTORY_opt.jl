@@ -7,6 +7,7 @@ export GreensPb_to_ALTRO
 export GreensPb_to_MADS
 export MADS_to_ALTRO
 export collide
+export find_d_max
 
 
 
@@ -15,8 +16,8 @@ using RobotDynamics
 using RobotZoo: Quadrotor
 using StaticArrays, Rotations, LinearAlgebra
 using Altro
-include("../../FYP_Optimization-main/Base_Functions.jl")
-include("TDM_Functions.jl")
+# include("../../FYP_Optimization-main/Base_Functions.jl")
+# include("TDM_Functions.jl")
 
 
 """
@@ -57,6 +58,12 @@ mutable struct Trajectory_Problem
         new(Mass, J, Gravity, Motor_Distance, kf, km, Model, [InitialState], [], FinalState)
     end
 
+    function Trajectory_Problem(Mass::Float64,J::Diagonal,Gravity::SVector,Motor_Distance::Float64,kf::Float64,km::Float64,InitialState::RBState)
+        Model = Quadrotor(mass=Mass, J=J, gravity=Gravity, motor_dist=Motor_Distance, kf=kf, km=km)
+
+        new( Mass, J, Gravity, Motor_Distance, kf, km, Model, [InitialState], [] )
+    end
+
 end
 
 
@@ -87,9 +94,52 @@ Performs a trajectory optimization of the MAV from StateHistory[end] (current st
 """
 
 
-function optimize(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, Nm::Int64)
-    optimize(MAV, tf, Nt, Nm, [false,[]])
+function find_d_max(MAV, tf::Float64, Nf::Int64)
+    n,m = size(MAV.Model)       # n: number of states 13; m: number of controls 4
+    num_states = n
+
+    x0 = SVector(MAV.StateHistory[end]) # CHANGE LATER!
+    Q = Diagonal(@SVector fill(1e-10, num_states))
+    R = Diagonal(@SVector fill(1e-10, m))
+    Qf = Diagonal(@SVector fill(-1.0, num_states))
+
+    obj = LQRObjective(Q, R, Qf, x0, Nf)  # only about the 3D position
+
+
+    cons = ConstraintList(num_states,m,Nf)
+    x_min = [-50.0,-50.0,0.0,  -2.0,-2.0,-2.0,-2.0,  -5.0,-5.0,-5.0,  -1.5,-1.5,-1.5]
+    x_max = [50.0,50.0,50.0,  2.0,2.0,2.0,2.0,  5.0,5.0,5.0,  1.5,1.5,1.5]
+    add_constraint!(cons, BoundConstraint(n, m, x_min=x_min, x_max=x_max), 1:Nf-1)
+
+    prob = Problem(MAV.Model, obj, x0, tf, constraints=cons);
+
+    # zero_SV = zeros(MAV.Model)[1]
+    # hover = zeros(MAV.Model)[2]
+    control_guess = zeros(Float64, (m,Nf-1))
+    # hover = @SVector fill(-2*MAV.Model.gravity[3]*MAV.Model.mass/4.0, size(MAV.Model)[2])
+
+    # state_guess = zeros(Float64, (num_states,Nf))
+    # for i in 1:Nf-1  
+    #     # state_guess[:,i] = zero_SV
+    #     control_guess[:,i] = no_control                    # 13 * number of (timesteps-1)
+    # end
+    # initial_states!(prob, state_guess)
+    initial_controls!(prob, control_guess)
+
+    rollout!(prob)   # simulate the system forward in time with the new controls
+
+    solver = ALTROSolver(prob);
+    solve!(solver);
+
+    status(solver)
+    println("Number of iterations: ", iterations(solver))
+    println("Final cost: ", cost(solver))
+    println("Final constraint satisfaction: ", max_violation(solver))
+
+    X = states(solver);
+    return X
 end
+
 
 
 

@@ -2,7 +2,6 @@ module Trajectory_Optimization
 
 export Trajectory_Problem
 export optimize
-export optimize_20230802
 
 using TrajectoryOptimization
 using RobotDynamics
@@ -65,81 +64,6 @@ function converge(MAV::Trajectory_Problem)
     distance = sqrt(sum((current_position - final_position).^2))
 
     return distance
-end
-
-
-function optimize_20230802(MAV::Trajectory_Problem, tf::Float64, Nt::Int64)
-    # delete Nm: not necessary
-    x0 = SVector(MAV.StateHistory[end])
-    xf = SVector(MAV.FinalState)
-
-    n,m = size(MAV.Model)
-
-    # Initialize cost function
-    Q = Diagonal(@SVector fill(1., n))
-    R = Diagonal(@SVector fill(5., m))
-    H = @SMatrix zeros(m, n)
-    q = -Q*xf
-    r = @SVector zeros(m)
-    c = xf'*Q*xf/2
-
-    cost = QuadraticCost(Q, R, H, q, r, c)  # change to (x[1:3] - x0[1:3]).^2
-    objective = Objective(cost, Nt)
-
-    # Constraints
-    # cons1  ( 
-    #   3D position [-10~60;-10~60;0~15]; 
-    #   orientation[-2~2]; 
-    #   linear velocity[-5~5]; 
-    #   angular velocity[-1.5~1.5]       )
-    cons = ConstraintList(n, m, Nt)
-    x_min = [-10.0,-10.0,0.0,  -2.0,-2.0,-2.0,-2.0,  -5.0,-5.0,-5.0,  -1.5,-1.5,-1.5]
-    x_max = [60.0,60.0,15.0,  2.0,2.0,2.0,2.0,  5.0,5.0,5.0,  1.5,1.5,1.5]
-    add_constraint!(cons, BoundConstraint(n, m, x_min=x_min, x_max=x_max), 1:Nt-1)
-
-    # cons2;  Add collision constraints if present [No need in determining the d bar]
-    # if collision[1] == true
-    #     x,y,z = collision[2]
-    #     add_constraint!(cons, SphereConstraint(n, [x], [y], [z], [1.5]), 1:Nt)
-    # end
-
-    # With random initial positions (with x0=x0)
-    # prob = Problem(MAV.Model, objective,  xf, tf, x0=x0, constraints=cons)
-    # prob = Problem(MAV.Model, objective, x0, tf, xf = xf, constraints=cons) # previous
-
-    prob = Problem(MAV.Model, objective, x0, tf, xf = xf, constraints=cons)
-    # Without random initial positions (without x0)
-    # prob = Problem(MAV.Model, objective,  xf, tf, constraints=cons)
-    
-
-    # State initialization: linear trajectory from start to end
-    # Control initialization: hover
-    state_guess = zeros(Float64, (n,Nt))
-    control_guess = zeros(Float64, (m,Nt-1))
-
-    hover = zeros(MAV.Model)[2]
-
-    for i in 1:Nt-1
-        state_guess[:,i] = x0 + (xf-x0)*(i-1)/(Nt-1)   
-        control_guess[:,i] = hover                     # 13 * number of (timesteps-1)
-    end
-
-    state_guess[:,Nt] = xf                             # 13 * number of timesteps
-
-    initial_states!(prob, state_guess)
-    initial_controls!(prob, control_guess)
-    altro = ALTROSolver(prob)
-    solve!(altro);
-
-    X = states(altro)
-
-    MAV.PredictedStates = X
-
-    for i in 2:Nt
-        push!(MAV.StateHistory, X[i])
-    end
-
-    return altro.stats.tsolve, cost, objective
 end
 
 

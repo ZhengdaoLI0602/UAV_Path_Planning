@@ -65,19 +65,21 @@ x0 = SVector(MAV.StateHistory[end]) # CHANGE LATER!
 # xf = SA_F64[1,2,pi]  # goal state
 
 # Q  = Diagonal(SA[0.1,0.1,0.01])
-Q = Diagonal(@SVector fill(1e-8, num_states))
+Q = Diagonal(@SVector fill(1e-10, num_states))
 # R  = Diagonal(SA[0.01, 0.1])
-R = Diagonal(@SVector fill(1e-8, m))
+R = Diagonal(@SVector fill(1e-10, m))
 # Qf = Diagonal(SA[1e2,1e2,1e3])
 Qf = Diagonal(@SVector fill(1.0, num_states))
 
 # obj = LQRObjective(Q,R,Qf,xf,N)
-obj = LQRObjective(Q,R,-Qf,x0,Nt)  # only about the 3D position
+obj = LQRObjective(Q, R, Qf, x0, Nt)  # only about the 3D position
+
+
 
 # cons = []
 cons = ConstraintList(num_states,m,Nt)
-x_min = [-10.0,-10.0,0.0,  -2.0,-2.0,-2.0,-2.0,  -5.0,-5.0,-5.0,  -1.5,-1.5,-1.5]
-x_max = [60.0,60.0,15.0,  2.0,2.0,2.0,2.0,  5.0,5.0,5.0,  1.5,1.5,1.5]
+x_min = [-50.0,-50.0,0.0,  -2.0,-2.0,-2.0,-2.0,  -5.0,-5.0,-5.0,  -1.5,-1.5,-1.5]
+x_max = [50.0,50.0,50.0,  2.0,2.0,2.0,2.0,  5.0,5.0,5.0,  1.5,1.5,1.5]
 add_constraint!(cons, BoundConstraint(n, m, x_min=x_min, x_max=x_max), 1:Nt-1)
 # # Goal constraint
 # goal = GoalConstraint(xf)
@@ -93,8 +95,23 @@ add_constraint!(cons, BoundConstraint(n, m, x_min=x_min, x_max=x_max), 1:Nt-1)
 prob = Problem(MAV.Model, obj, x0, hor, constraints=cons);
 
 
+
+
 # initial_controls!(prob, [@SVector rand(m) for k = 1:N-1])
-initial_controls!(prob, [@SVector rand(m) for k = 1:Nt-1])
+# initial_controls!(prob, [@SVector rand(m) for k = 1:Nt-1])
+zero_SV = zeros(MAV.Model)[1]
+hover = zeros(MAV.Model)[2]
+control_guess = zeros(Float64, (m,Nt-1))
+hover = @SVector fill(-2*MAV.Model.gravity[3]*MAV.Model.mass/4.0, size(MAV.Model)[2])
+
+state_guess = zeros(Float64, (num_states,Nt))
+for i in 1:Nt-1  
+    state_guess[:,i] = zero_SV
+    control_guess[:,i] = hover                     # 13 * number of (timesteps-1)
+end
+# initial_states!(prob, state_guess)
+# initial_controls!(prob, control_guess)
+
 # rollout!(prob)   # simulate the system forward in time with the new controls
 rollout!(prob)   # simulate the system forward in time with the new controls
 
@@ -113,6 +130,8 @@ println("Final cost: ", cost(solver))
 println("Final constraint satisfaction: ", max_violation(solver))
 
 X = states(solver) 
+
+
 
 
 
