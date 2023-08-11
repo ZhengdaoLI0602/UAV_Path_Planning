@@ -18,17 +18,17 @@ end
 
 
 # Progressive Constraint 2: Post-optimized positions cannot fall within the previous circles
-function cons2(x)
-    this_group = Base_Functions.make_circles(x)
-    for cirA in circles_pool
-        for cirB in this_group
-            if Base_Functions.contained(cirA,cirB) !== nothing
-                return false
-            end
-        end
-    end
-    return true
-end
+# function cons2(x)
+#     this_group = Base_Functions.make_circles(x)
+#     for cirA in circles_pool
+#         for cirB in this_group
+#             if Base_Functions.contained(cirA,cirB) !== nothing
+#                 return false
+#             end
+#         end
+#     end
+#     return true
+# end
 
 
 # Progressive Constraint 3: Limits on the displacement between "pre-optimized" and "post-optimized" position for each UAV

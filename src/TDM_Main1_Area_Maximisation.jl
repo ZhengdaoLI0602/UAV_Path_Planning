@@ -4,7 +4,7 @@ include("../../FYP_Optimization-main/Greens_Method.jl")
 # using .Greens_Method
 include("../../FYP_Optimization-main/Plotter.jl")
 using Random
-Random.seed!(123)
+# Random.seed!(123)
 
 include("TDM_Functions.jl")
 include("Circle_Domain.jl")
@@ -19,9 +19,9 @@ FOV = 80/180*π      # FOV in radians
 h_min = 5           # (user-defined, replaced later) Flying altitude lower bound (exclude initialization)
 h_max = 100         # Flying altitude upper bound
 r_min = h_min * tan(FOV/2) # (user-defined, replaced later)
-r_min = 0
+r_min = 0           # (user-defined, replaced later)
 r_max = h_max * tan(FOV/2) 
-d_lim = 35           # (user-defined) limitations on displacement of group UAV induced from optimization 
+d_lim = 4           # (user-defined) limitations on displacement of group UAV induced from optimization 
 
 
 # Define objective (COPIED)
@@ -35,7 +35,7 @@ end
 
 # Define extreme and progressive constraints
 include("TDM_Constraints.jl")
-cons_ext = [cons1, cons2,cons3]
+cons_ext = [cons1, cons3]
 cons_prog = []
 
 # Main loop for change of domain and coverage optimization

@@ -96,9 +96,9 @@ function check(output, r_min, r_max)
 
     for i in 1:N
         for j in i+1:N
-            if contained(output_circles[i],output_circles[j]) == output_circles[i]
+            if contained(output_circles[i], output_circles[j]) == output_circles[i]
                 is_contained[i] = true
-            elseif contained(output_circles[i],output_circles[j]) == output_circles[j]
+            elseif contained(output_circles[i], output_circles[j]) == output_circles[j]
                 is_contained[j] = true
             end
         end

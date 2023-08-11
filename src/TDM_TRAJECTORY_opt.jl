@@ -82,6 +82,83 @@ function converge(MAV::Trajectory_Problem)
     return distance
 end
 
+
+
+"""
+    find_d_max(MAV::Trajectory_Problem, tf::Float64, Nf::Int64)
+
+Returns the X(predicted states), prob (problem object), obj (objective function object) of the d bar determination
+"""
+function find_d_max(MAV, tf::Float64, Nf::Int64, XF::Float64)
+    n,m = size(MAV.Model)       # n: number of states 13; m: number of controls 4
+    num_states = n
+
+    # xf = SVector(MAV.StateHistory[end]); # however it is the given x0, 20230810
+    weight_Q = 1.0 #1e-30
+    weigth_R = 1.0 #1e-30
+    weigth_Qf = 5.0 #5.0
+    Q = Diagonal(@SVector fill(weight_Q, num_states))
+    # Q = Diagonal(SA[weight_Q, weight_Q, weight_Q, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    R = Diagonal(@SVector fill(weigth_R, m))
+    Qf = Diagonal(@SVector fill(weigth_Qf, num_states)) #xf: 0,0,0, Qf 1,1,1
+    # Qf = Diagonal(SA[weigth_Qf, weigth_Qf, weigth_Qf, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) #xf: 0,0,0, Qf 1,1,1
+
+
+    # x0 = [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN];
+    x0 = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    xf = [XF, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+
+
+
+
+    obj = LQRObjective(Q, R, Qf, xf, Nf)  # only about the 3D position
+
+    cons = ConstraintList(num_states, m, Nf)
+    x_min = [-50.0,-50.0,0.0,  -2.0,-2.0,-2.0,-2.0,  -5.0,-5.0,-5.0,  -1.5,-1.5,-1.5]
+    x_max = [50.0,50.0,50.0,  2.0,2.0,2.0,2.0,  5.0,5.0,5.0,  1.5,1.5,1.5]
+    add_constraint!(cons, BoundConstraint(n, m, x_min=x_min, x_max=x_max), 1:Nf-1)
+
+
+    prob = Problem(MAV.Model, obj, x0, tf, xf=xf, constraints=cons);
+    # prob = Problem(MAV.Model, obj; xf=xf, tf=tf, constraints=cons);
+
+    # zero_SV = zeros(MAV.Model)[1]
+    hover = zeros(MAV.Model)[2]
+    # hover = @SVector fill(-2*MAV.Model.gravity[3]*MAV.Model.mass/4.0, size(MAV.Model)[2])
+
+    state_guess = zeros(Float64, (num_states,Nf))
+    control_guess = zeros(Float64, (m, Nf-1))
+    for i in 1: Nf-1  
+        state_guess[:,i] = x0 + (xf-x0)*(i-1)/(Nf-1)
+        control_guess[:,i] = hover                    # 13 * number of (timesteps-1)
+    end
+    state_guess[:,Nf] = xf 
+    initial_states!(prob, state_guess)
+    initial_controls!(prob, control_guess)
+
+    rollout!(prob);   # simulate the system forward in time with the new controls
+
+    solver = ALTROSolver(prob);
+
+    # opts = SolverOptions()
+    # opts.cost_tolerance = 1e-5
+    solver = ALTROSolver(prob,show_summary=false);
+
+    solve!(solver);
+
+    # status(solver);
+    # println("Number of iterations: ", iterations(solver))
+    # println("Final cost: ", cost(solver))
+    # println("Final constraint satisfaction: ", max_violation(solver))
+
+    X = states(solver);
+
+    return X, solver, prob, obj
+end
+
+
+
+
 """
     optimize(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, collision::Vector{Any})
 
@@ -92,60 +169,6 @@ Performs a trajectory optimization of the MAV from StateHistory[end] (current st
     - 'Nt::Int64': Number of timesteps
     - 'collision::Vector{Any}': Vector of form [Boolean,[x,y,z]], where the Boolean value describes if a collision is imminent with any other MAVs at the location (x,y,z)
 """
-
-
-function find_d_max(MAV, tf::Float64, Nf::Int64)
-    n,m = size(MAV.Model)       # n: number of states 13; m: number of controls 4
-    num_states = n
-
-    x0 = SVector(MAV.StateHistory[end]) 
-    Q = Diagonal(@SVector fill(1e-10, num_states))
-    R = Diagonal(@SVector fill(1e-10, m))
-    Qf = Diagonal(@SVector fill(-1.0, num_states))
-
-    obj = LQRObjective(Q, R, Qf, x0, Nf)  # only about the 3D position
-
-
-    cons = ConstraintList(num_states,m,Nf)
-    x_min = [-50.0,-50.0,0.0,  -2.0,-2.0,-2.0,-2.0,  -5.0,-5.0,-5.0,  -1.5,-1.5,-1.5]
-    x_max = [50.0,50.0,50.0,  2.0,2.0,2.0,2.0,  5.0,5.0,5.0,  1.5,1.5,1.5]
-    add_constraint!(cons, BoundConstraint(n, m, x_min=x_min, x_max=x_max), 1:Nf-1)
-
-    prob = Problem(MAV.Model, obj, x0, tf, constraints=cons);
-
-    # zero_SV = zeros(MAV.Model)[1]
-    # hover = zeros(MAV.Model)[2]
-    # hover = @SVector fill(-2*MAV.Model.gravity[3]*MAV.Model.mass/4.0, size(MAV.Model)[2])
-    control_guess = zeros(Float64, (m,Nf-1))
-    
-
-    # state_guess = zeros(Float64, (num_states,Nf))
-    # for i in 1:Nf-1  
-    #     # state_guess[:,i] = zero_SV
-    #     control_guess[:,i] = no_control                    # 13 * number of (timesteps-1)
-    # end
-
-    # initial_states!(prob, state_guess)
-    initial_controls!(prob, control_guess)
-
-    rollout!(prob)   # simulate the system forward in time with the new controls
-
-    solver = ALTROSolver(prob);
-    solve!(solver);
-
-    status(solver)
-    # println("Number of iterations: ", iterations(solver))
-    # println("Final cost: ", cost(solver))
-    # println("Final constraint satisfaction: ", max_violation(solver))
-
-    X = states(solver);
-    return X
-end
-
-
-
-
-
 function optimize(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, Nm::Int64, collision::Vector{Any})
 
     x0 = SVector(MAV.StateHistory[end])  # initial 3D positions of MAV
@@ -168,9 +191,9 @@ function optimize(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, Nm::Int64, co
     # Constraints
     cons = ConstraintList(n, m, Nt)
 
-    # x_min = [-10.0,-10.0,0.0,-2.0,-2.0,-2.0,-2.0,-5.0,-5.0,-5.0,-1.5,-1.5,-1.5] 
-    # # target limits for different variables (positions; orientations; velocity; angular velocity)
-    # x_max = [60.0,60.0,15.0,2.0,2.0,2.0,2.0,5.0,5.0,5.0,1.5,1.5,1.5]
+    # # modified after 2023.08.09
+    # x_min = [-50.0,-50.0,0.0,  -2.0,-2.0,-2.0,  -5.0,-5.0,-5.0,  -1.5,-1.5,-1.5]
+    # x_max = [50.0,50.0,50.0,  2.0,2.0,2.0,  5.0,5.0,5.0,  1.5,1.5,1.5]
 
     x_min = [-100.0,-100.0,0.0,-2.0,-2.0,-2.0,-2.0,-5.0,-5.0,-5.0,-1.5,-1.5,-1.5] 
     # target limits for different variables (positions; orientations; velocity; angular velocity)
@@ -226,6 +249,8 @@ end
 
 
 
+
+
 function GreensPb_to_ALTRO(GreensPb)
     return MADS_to_ALTRO(GreensPb_to_MADS(GreensPb))
 end
@@ -253,11 +278,20 @@ function MADS_to_ALTRO(z::Vector{Float64})
         z_val = R_val/tan(FOV/2)
 
         push!(x, RBState([x_val, y_val, z_val], UnitQuaternion(I), zeros(3), zeros(3))); 
-        # positions(3), orientation(4), velocity(3), angular velocity(3) 
+        # positions(3), orientation(4), velocity(3), angular velocity(3)
+
+        # push!(x, RBState([x_val, y_val, z_val], zeros(3), zeros(3), zeros(3))); 
+        # ---- modified on 2023.08.09 -----
+        # positions(3), 
+        # Euler angles(3: phi (roll)|theta (pitch)|psi (yaw)), 
+        # Linear velocity(3), 
+        # Angular velocity(3) 
     end
 
     return x
 end
+
+
 
 """
     collide(MAV1::Trajectory_Problem, MAV2::Trajectory_Problem, R_C::Float64, Nt::Int64)
