@@ -7,7 +7,6 @@ using Random
 # Random.seed!(123)
 
 include("TDM_Functions.jl")
-include("Circle_Domain.jl")
 
 
 # Parameters settings
@@ -21,7 +20,7 @@ h_max = 100         # Flying altitude upper bound
 r_min = h_min * tan(FOV/2) # (user-defined, replaced later)
 r_min = 0           # (user-defined, replaced later)
 r_max = h_max * tan(FOV/2) 
-d_lim = 4           # (user-defined) limitations on displacement of group UAV induced from optimization 
+d_lim = 5           # (user-defined) limitations on displacement of group UAV induced from optimization 
 
 
 # Define objective (COPIED)
@@ -44,12 +43,15 @@ include("TDM_STATIC_opt.jl")
 
 # Initialize variables
 # cir_domain = Base_Functions.Circle(0,0,R1,[],[])  # Initialize the time-dependent map (TDM)
-cir_domain = Circle_Domain.Domains_Problem([], R1, ΔR)
+cir_domain = TDM_Functions.Domains_Problem([], R1, ΔR)
 
 # Randomly allocate circles in the beginning
-global STATIC_input = TDM_Functions.allocate_random_circles(cir_domain, N, r_max)
+# global STATIC_input = TDM_Functions.allocate_random_circles(cir_domain, N, r_max) #20230815 
+global STATIC_input = TDM_Functions.allocate_even_circles(5.0, N, 5.0) #20230815 
 # TDM_Functions.show_circles(circles,cir_domain) # TEST PASSED
-circles = Base_Functions.make_circles(STATIC_input)
+circles = Base_Functions.make_circles(STATIC_input) 
+
+TDM_Functions.show_circles(circles, cir_domain.Domain_History[1]) #20230815 
 
 global circles_pool =  circles   # Initialize circle pool
 

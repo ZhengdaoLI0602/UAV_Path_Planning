@@ -17,7 +17,7 @@ using RobotZoo: Quadrotor
 using StaticArrays, Rotations, LinearAlgebra
 using Altro
 # include("../../FYP_Optimization-main/Base_Functions.jl")
-# include("TDM_Functions.jl")
+include("TDM_Functions.jl")
 
 
 """
@@ -89,14 +89,14 @@ end
 
 Returns the X(predicted states), prob (problem object), obj (objective function object) of the d bar determination
 """
-function find_d_max(MAV, tf::Float64, Nf::Int64, XF::Float64)
+function find_d_max(MAV, tf::Float64, Nf::Int64, d::Float64, sin_phi, cos_theta, sin_theta)
     n,m = size(MAV.Model)       # n: number of states 13; m: number of controls 4
     num_states = n
 
     # xf = SVector(MAV.StateHistory[end]); # however it is the given x0, 20230810
-    weight_Q = 1.0 #1e-30
-    weigth_R = 1.0 #1e-30
-    weigth_Qf = 5.0 #5.0
+    weight_Q = 1e-10
+    weigth_R = 1e-10
+    weigth_Qf = 1.0
     Q = Diagonal(@SVector fill(weight_Q, num_states))
     # Q = Diagonal(SA[weight_Q, weight_Q, weight_Q, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
     R = Diagonal(@SVector fill(weigth_R, m))
@@ -105,8 +105,13 @@ function find_d_max(MAV, tf::Float64, Nf::Int64, XF::Float64)
 
 
     # x0 = [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN];
+
+    # x0 = SVector(MAV.StateHistory[end])
     x0 = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
-    xf = [XF, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    xf = [x0[1]+ d*sin_phi*cos_theta, x0[2]+ d*sin_phi*sin_theta, x0[3]+ d*cos_theta, 
+          1.0, 0.0, 0.0, 0.0, 
+          0.0, 0.0, 0.0, 
+          0.0, 0.0, 0.0];
 
 
 
@@ -142,7 +147,7 @@ function find_d_max(MAV, tf::Float64, Nf::Int64, XF::Float64)
 
     # opts = SolverOptions()
     # opts.cost_tolerance = 1e-5
-    solver = ALTROSolver(prob,show_summary=false);
+    # solver = ALTROSolver(prob,show_summary=false);
 
     solve!(solver);
 
@@ -172,7 +177,7 @@ Performs a trajectory optimization of the MAV from StateHistory[end] (current st
 function optimize(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, Nm::Int64, collision::Vector{Any})
 
     x0 = SVector(MAV.StateHistory[end])  # initial 3D positions of MAV
-    xf = SVector(MAV.FinalState)         # final 3D positions of MAV
+    xf = SVector(MAV.FinalState)         # final 3D positions of MAV(CONSTANT along the horizon)
 
     n,m = size(MAV.Model) # n: number of states; m: number of control inputs
 

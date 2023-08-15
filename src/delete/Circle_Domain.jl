@@ -1,5 +1,4 @@
 module Circle_Domain
-
 include("../../FYP_Optimization-main/Base_Functions.jl")
 using .Base_Functions
 
@@ -26,8 +25,6 @@ mutable struct Domains_Problem
 
         # this.Total_epochs = Total_epochs
         this.Expand_rate = Expand_rate
-
-
 
         this.domain_expand = function ()
             # for i in 1: this.Total_epochs

@@ -5,9 +5,10 @@ using RobotZoo: Quadrotor
 using RobotDynamics
 
 # Drone Parameters
-mass = 0.4                                       # mass of quadrotor
+mass = 0.5                                       # mass of quadrotor
 J = Diagonal(@SVector[0.0023, 0.0023, 0.004])    # inertia matrix
-gravity = SVector(0,0,-3.721)                    # gravity vector
+# gravity = SVector(0,0,-3.721)                    
+gravity = SVector(0,0,-9.81)                     # gravity vector
 motor_dist = 0.1750                              # distance between motors
 kf = 1.0                                         # motor force constant (motor force = kf*u)
 km = 0.0245                                      # motor torque constant (motor torque = km*u)
@@ -35,16 +36,22 @@ end
 
 
 
+
+
 # for q in eachindex(history_input_pb)
-for q in 1:4
+# for q in 1:2
+    # q = 1
+    q = 2
     println("===Epoch No. $q starts===")
-    global x_start = TDM_TRAJECTORY_opt.GreensPb_to_ALTRO(history_input_pb[q])
+    if q ==1
+        global x_start = TDM_TRAJECTORY_opt.GreensPb_to_ALTRO(history_input_pb[q])
+    end
     global x_final = TDM_TRAJECTORY_opt.GreensPb_to_ALTRO(history_output_pb[q])
 
 
     global MAVs = Vector{TDM_TRAJECTORY_opt.Trajectory_Problem}()
     for i in 1:N
-        push!(MAVs,TDM_TRAJECTORY_opt.Trajectory_Problem(mass,J,gravity,motor_dist,kf,km,x_start[i],x_final[i]))
+        push!(MAVs, TDM_TRAJECTORY_opt.Trajectory_Problem(mass,J,gravity,motor_dist,kf,km,x_start[i],x_final[i]))
     end
 
 
@@ -65,7 +72,6 @@ for q in 1:4
     while total_converge == false
         global countIter += 1
         println("-----------------------------Unconverged iteration No. $countIter -----------------------------")
-        # for testing
         global total_converge = true
         
         # Optimize if MAV has not converged to final position
@@ -74,7 +80,7 @@ for q in 1:4
             if TDM_TRAJECTORY_opt.converge(MAV) > 0.1
                 global total_converge = false
                 t = TDM_TRAJECTORY_opt.optimize(MAV,hor,Nt,Nm,collision[i])
-                push!(this_my_time[i],t)  
+                push!(this_my_time[i],t)  #should be uncommented back
             end
             println("Optimisation for MAV no. $i") # for testing
         end
@@ -95,6 +101,7 @@ for q in 1:4
                 end
             end
         end
+
     end
 
     # Normalise state histories
@@ -103,6 +110,7 @@ for q in 1:4
         MAV = MAVs[i]
         size = length(MAV.StateHistory)
         if size < longest
+            println("There is $i be increased in statehistory length")
             for j in 1:longest-size
                 push!(MAV.StateHistory,MAV.StateHistory[end])
             end
@@ -114,15 +122,40 @@ for q in 1:4
     for i in 1:N  # UAV index i
         MAV = MAVs[i]
         x = zeros(Float64, (length(MAV.StateHistory),13))
+        # col1-3 (position); col4-7 (quaternion); col8-10(linear velocity); col11-13(angular velocity)
         for j in 1:length(MAV.StateHistory) # trajectory optimization index j (row)
             x[j,:] = MAV.StateHistory[j]    # StateHistory content(column)
         end
         push!(X,x)
+        # "x" is the trajectory for each UAV
+        # "X" contains all the individual "x"
     end
 
     my_time[q,:] = this_my_time 
     push!(Xs, X)
-end
+
+    
+
+    junc_state=Vector{RBState}()
+    # junc_state = zeros(N,13)
+    for i in 1:N
+        # i = 1
+        # junc_state[i, 1:3] = X[i][end,:][1:3] # position
+        # junc_state[i, 4:7] = X[i][end,:][4:7] # orientation
+        # junc_state[i, 8:10] = X[i][end,:][8:10] # linear vel
+        # junc_state[i, 11:13] = X[i][end,:][11:13] # angular vel
+
+        # push!(junc_state, RBState(X[i][end,:][1:3], X[i][end,:][4:7], X[i][end,:][8:10], X[i][end,:][11:13]))
+        push!(junc_state, RBState(X[i][end,:][1:3], UnitQuaternion(I), zeros(3), zeros(3)))
+    end
+
+
+
+    global x_start = junc_state
+    # 20230812 night
+    # 1. Check how to get element in RBVector
+    # 2. Add the ending quaternion to the updated state vector
+# end
 
 
 
