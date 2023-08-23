@@ -21,6 +21,10 @@ R_D = 10.0          # Danger radius
 R_C = 1.0           # Collision radius
 Nm = 5              # Number of applied time-steps
 
+# if @isdefined (history_output_pb_backup)
+#     global history_input_pb = history_input_pb_backup
+#     global history_output_pb = history_output_pb_backup
+# end
 
 
 # Obtain initial and final states for all drones (Got from Static optimization)
@@ -34,14 +38,37 @@ for i in 1:length(history_input_pb), j in 1:N
     my_time[i,j] = []
 end
 
+no_movement = []
+for i in eachindex(history_input_pb)
+    if i!=length(history_input_pb)
+        this_circles = history_input_pb[i].circles
+        next_circles = history_input_pb[i+1].circles
+        for ind = eachindex(this_circles)
+            if this_circles[ind].x == next_circles[ind].x &&
+                this_circles[ind].y == next_circles[ind].y &&
+                this_circles[ind].R == next_circles[ind].R
+                push!(no_movement, ind)
+            end
+        end
+    end
+end
 
+history_input_pb_backup = history_input_pb
+history_output_pb_backup = history_output_pb
 
+for i in eachindex(history_input_pb)
+    deleteat!(history_input_pb[i].circles, unique(no_movement))
+    deleteat!(history_output_pb[i].circles, unique(no_movement))
+end
 
+N = N - length(unique(no_movement))
 
-# for q in eachindex(history_input_pb)
+global jjj = 1
+for q in eachindex(history_input_pb)
+    global jjj = q
 # for q in 1:2
     # q = 1
-    q = 2
+    # q = 2
     println("===Epoch No. $q starts===")
     if q ==1
         global x_start = TDM_TRAJECTORY_opt.GreensPb_to_ALTRO(history_input_pb[q])
@@ -54,7 +81,6 @@ end
         push!(MAVs, TDM_TRAJECTORY_opt.Trajectory_Problem(mass,J,gravity,motor_dist,kf,km,x_start[i],x_final[i]))
     end
 
-
     global total_converge = false # Check if all MAVs have converged
     global collision = Vector{Any}(undef,N) # Vector describing collision constraints
     for i in 1:N
@@ -62,7 +88,7 @@ end
     end
 
     # Initialise vector for solution timesF
-    global this_my_time = my_time[q,:]
+    # global this_my_time = my_time[q,:]
     # for i in 1:N
     #     global this_my_time[i] = []
     # end
@@ -80,9 +106,9 @@ end
             if TDM_TRAJECTORY_opt.converge(MAV) > 0.1
                 global total_converge = false
                 t = TDM_TRAJECTORY_opt.optimize(MAV,hor,Nt,Nm,collision[i])
-                push!(this_my_time[i],t)  #should be uncommented back
+                # push!(this_my_time[i],t)  #should be uncommented back
             end
-            println("Optimisation for MAV no. $i") # for testing
+            println("Optimization for MAV no. $i"); # for testing
         end
 
         # Check for collision
@@ -101,7 +127,10 @@ end
                 end
             end
         end
-
+        if countIter > 100
+            println("Over 100 MPC trails")
+            break
+        end
     end
 
     # Normalise state histories
@@ -131,7 +160,7 @@ end
         # "X" contains all the individual "x"
     end
 
-    my_time[q,:] = this_my_time 
+    # my_time[q,:] = this_my_time 
     push!(Xs, X)
 
     
@@ -155,7 +184,7 @@ end
     # 20230812 night
     # 1. Check how to get element in RBVector
     # 2. Add the ending quaternion to the updated state vector
-# end
+end
 
 
 
@@ -168,15 +197,23 @@ using Plots
 
 # Static 3D plot
 p = plot(legend=:outertopright, minorgrid=true, minorgridalpha=0.25)
-palette = ["blue", "orange", "green", "red", "purple", "pink", "gray", "olive", "cyan"]
-for j in eachindex(Xs)
+palette = ["blue", "orange", "green", "purple", "cyan", "pink", "gray", "olive"]
+for j in 1:3 #eachindex(Xs)
     this_X = Xs[j]
     for i in 1:N
         this_color = palette[mod1(i,length(palette))]
         if j==1
-            plot!(this_X[i][:,1],this_X[i][:,2],this_X[i][:,3], color = this_color, markershape=:none, label="MAV $i", xlims=(-50,50), ylims=(-50,50), zlims=(0,50), xlabel="x (m)", ylabel="y (m)", zlabel="z (m)")
+            plot!(this_X[i][:,1],this_X[i][:,2],this_X[i][:,3], 
+            color = this_color, markershape=:none, label="MAV $i", 
+            grid = true,
+            xlims=(-50,50), ylims=(-50,50), zlims=(0,100), 
+            xlabel="x (m)", ylabel="y (m)", zlabel="z (m)")
         else
-            plot!(this_X[i][:,1],this_X[i][:,2],this_X[i][:,3], color = this_color, markershape=:none, label=:none ,xlims=(-50,50), ylims=(-50,50), zlims=(0,50), xlabel="x (m)", ylabel="y (m)", zlabel="z (m)")
+            plot!(this_X[i][:,1],this_X[i][:,2],this_X[i][:,3], 
+            color = this_color, markershape=:none, label=:none ,
+            grid = true,
+            xlims=(-50,50), ylims=(-50,50), zlims=(0,100), 
+            xlabel="x (m)", ylabel="y (m)", zlabel="z (m)")
         end
     end
 end

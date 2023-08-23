@@ -10,18 +10,19 @@ include("TDM_Functions.jl")
 
 
 # Parameters settings
-M = 8               # (user-defined) Total number of map updates 
+M = 5               # (user-defined) Total number of map updates 
 N = 5               # (user-defined) Total number of UAVs 
-R1 = 20.0            # (user-defined) Initial radius 
+R1 = 100.0            # (user-defined) Initial radius 
 ΔR = 2.0              # Expanding rate: 2m/update
 FOV = 80/180*π      # FOV in radians
 h_min = 5           # (user-defined, replaced later) Flying altitude lower bound (exclude initialization)
 h_max = 100         # Flying altitude upper bound
 r_min = h_min * tan(FOV/2) # (user-defined, replaced later)
+
 r_min = 0           # (user-defined, replaced later)
 r_max = h_max * tan(FOV/2) 
-d_lim = 5           # (user-defined) limitations on displacement of group UAV induced from optimization 
-
+d_lim = 17.5 #critical_dis           # (user-defined) limitations on displacement of group UAV induced from optimization 
+N_iter = 100        # (use-defined) set the limit of iterations for coverage maximization
 
 # Define objective (COPIED)
 function obj_main1(x)
@@ -34,7 +35,7 @@ end
 
 # Define extreme and progressive constraints
 include("TDM_Constraints.jl")
-cons_ext = [cons1, cons3]
+cons_ext = [cons1, cons2, cons3]
 cons_prog = []
 
 # Main loop for change of domain and coverage optimization
@@ -48,17 +49,25 @@ cir_domain = TDM_Functions.Domains_Problem([], R1, ΔR)
 # Randomly allocate circles in the beginning
 # global STATIC_input = TDM_Functions.allocate_random_circles(cir_domain, N, r_max) #20230815 
 global STATIC_input = TDM_Functions.allocate_even_circles(5.0, N, 5.0) #20230815 
+# r_uav = 5.0
+# global STATIC_input = TDM_Functions.allocate_even_circles(r_uav/sin(pi/N), N, r_uav) #20230815 
+
 # TDM_Functions.show_circles(circles,cir_domain) # TEST PASSED
 circles = Base_Functions.make_circles(STATIC_input) 
 
-TDM_Functions.show_circles(circles, cir_domain.Domain_History[1]) #20230815 
+using Plots
+plotlyjs()
+plot()
+TDM_Functions.show_epoch(circles, cir_domain.Domain_History[1]) #20230815 
+# title!("Evenly-distributed $(N) circles", titlefontsize=12)
+# xlabel!("x (m)")
+# ylabel!("y (m)")
+# annotate!([(0, 25, text("Custom Title Position", :center, 16))])
 
-global circles_pool =  circles   # Initialize circle pool
+# savefig("E:/IRP/myplot.png")
 
 
-# r_min = 0 # (copied) for testing
-# d_lim = 5 # (copied)for testing
-N_iter = 100 # (use-defined) set the limit of iterations for coverage maximization
+global circles_pool = circles   # Initialize circle pool
 global pre_optimized_circles = circles
 
 history_input_pb = []
@@ -66,16 +75,24 @@ history_output_pb = []
 # history_TDM = []
 
 for k in 1: M 
+    new_inputs =[]
     # I. Initialize an array of the UAV group in this epoch
     # this_circle_group = [Base_Functions.Circle(0,0,0,[],[]) for i in 1:N]
 
     # II. Maximize the union of circles, get the 2D positions and radius of UAVs
     global STATIC_input = TDM_Functions.make_MADS(pre_optimized_circles)
+    # for i in 1:N
+    #     global STATIC_input[end-i+1] = STATIC_input[end-i+1]+0.1
+    # end
     input_problem = Greens_Method.Greens_Problem(STATIC_input)
     # Plotter.Plot(input_problem,[30,30],"Input_$k") ## TEST PASSED
 
     # III. STATIC_output = TDM_STATIC_opt.optimize(STATIC_input, obj, cons_ext, cons_prog, N_iter, r_max, domain_x, domain_y)
-    STATIC_output = TDM_STATIC_opt.optimize(STATIC_input, obj_main1, cons_ext, cons_prog, N_iter, r_min, r_max)
+    global STATIC_output = TDM_STATIC_opt.optimize(STATIC_input, obj_main1, cons_ext, cons_prog, N_iter, r_min, r_max, d_lim, new_inputs, k)
+    if STATIC_output == false
+        println("The problem cannot be well solved s.t. all constraints")
+        break
+    end
     output_problem = Greens_Method.Greens_Problem(STATIC_output)
     # Plotter.Plot(output_problem,[30,30],"Output_$k") ## TEST PASSED
 
@@ -89,6 +106,9 @@ for k in 1: M
     push!(history_output_pb, output_problem)
     # push!(history_TDM, cir_domain)
 
+    # TDM_Functions.show_epoch(post_optimized_circles, nothing) # for testing
+
+
     if k != M
         # VI. Update the map (substitude with Class functions later on)
         # global cir_domain = Base_Functions.Circle(0, 0, R1 + k * ΔR, [], [])
@@ -101,35 +121,51 @@ end
 
 
 
+if STATIC_output!= false
+    using Plots
+    plotlyjs()
 
-using Plots
-plotlyjs()
+    history_TDM = cir_domain.Domain_History
+    # Show the locations of circles in each epoch
+    # include("TDM_Functions.jl")
+    for rnd in eachindex(history_TDM)
+        plot()
+        string = "TDM_Circles_$rnd" 
+        show_domain = true
+        show_coverage = false
+        TDM_Functions.show_epoch(history_output_pb[rnd].circles, history_TDM[rnd]) 
+        savefig(string)
+    end
 
-history_TDM = cir_domain.Domain_History
-# Show the locations of circles in each epoch
-for i in eachindex(history_TDM)
-    string = "TDM_Circles_$i" 
-    TDM_Functions.show_circles(history_output_pb[i].circles, history_TDM[i]) 
-    savefig(string)
-end
 
-
-# Show the UAVs coverage from first epoch to the last
-for i in eachindex(history_TDM)
+    # Show the UAVs coverage from first epoch to the last
+    # include("TDM_Functions.jl")
     plot()
-    string = "TDM_Coverage_$i"
-    this_pool = circles_pool[1:N*i]
-    this_domain = history_TDM[i]
-    TDM_Functions.show_circles(this_pool, this_domain)
-    savefig(string)
+    for rnd in eachindex(history_TDM)
+        string = "TDM_Coverage_$rnd"
+        this_pool = circles_pool[1:N*rnd]
+        this_domain = history_TDM[rnd]
+        if rnd == M
+            show_domain = true
+        else
+            show_domain = false
+        end
+        TDM_Functions.show_coverage(this_pool, this_domain, rnd, M, N)
+        savefig(string)
+    end
+
+
+    # Plotting outline with domain boundary
+    final_MADS = TDM_Functions.make_MADS(circles_pool)
+    final_pb = Greens_Method.Greens_Problem(final_MADS)
+    Plotter.Plot(final_pb,[70,70],"Final") ## TEST PASSED
+
+    domain_x, domain_y = Base_Functions.draw(cir_domain.Domain_History[end], 0.0, 2π)
+    plot!(domain_x, domain_y, aspect_ratio=1, legend=:outertopright, label="Domain", color = "red", linewidth = 5)
+
+
+    # Calculate the covered area
+    for i in eachindex(history_input_pb)
+        println("Epoch$i -- Domain area: $(π*(history_TDM[i].R)^2); Initially UAVs cover: $(history_input_pb[i].area); Finally UAVs cover: $(history_output_pb[i].area)")
+    end
 end
-
-
-# Plotting outline with domain boundary
-final_MADS = TDM_Functions.make_MADS(circles_pool)
-final_pb = Greens_Method.Greens_Problem(final_MADS)
-Plotter.Plot(final_pb,[70,70],"Final") ## TEST PASSED
-
-domain_x, domain_y = Base_Functions.draw(cir_domain.Domain_History[end], 0.0, 2π)
-plot!(domain_x, domain_y, aspect_ratio=1, legend=:outertopright, color = "red", linewidth = 5)
-

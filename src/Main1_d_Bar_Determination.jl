@@ -6,6 +6,7 @@ using RobotZoo: Quadrotor
 using RobotDynamics
 using TrajectoryOptimization
 using Altro
+using Random
 
 # Drone Parameters
 mass = 0.5                                       # mass of quadrotor # default 0.5
@@ -14,7 +15,7 @@ gravity = SVector(0,0,-9.81)                     # gravity vector # default SVec
 motor_dist = 0.1750                              # distance between motors
 kf = 1.0                                         # motor force constant (motor force = kf*u) # default 1.0
 km = 0.0245                                      # motor torque constant (motor torque = km*u) # default 0.0245
-r_max = 100 * tand(80/2)
+# r_max = 100 * tand(80/2)
 # N = 5                                            # number of UAVs
 
 
@@ -37,7 +38,6 @@ tf = hor            # for testing on 20230809
 # NO_PROGRESS = 8
 # COST_INCREASE = 9
 
-
 # cir_domain = TDM_Functions.Domains_Problem([], 20.0, 2.0) # 
 # global MADS_input = TDM_Functions.allocate_random_circles(cir_domain, N, r_max) # may be recovered 20230814
 # x_start = TDM_TRAJECTORY_opt.MADS_to_ALTRO(MADS_input)                         # may be recovered 20230814
@@ -51,13 +51,6 @@ tf = hor            # for testing on 20230809
 # end
 
 
-
-
-
-x_start_dBar = RBState([0.0,0.0,0.0,  1.0,0.0,0.0,0.0,  0.0,0.0,0.0,  0.0,0.0,0.0])
-MAV = TDM_TRAJECTORY_opt.Trajectory_Problem(mass, J, gravity, motor_dist, kf, km, x_start_dBar)
-
-
 # include("TDM_Trajectory_Opt.jl")
 # XF = 7.5
 # X, solver_dBar, prob_dBar, obj_dBar = TDM_TRAJECTORY_opt.find_d_max(MAV, hor, Nf, XF);
@@ -68,34 +61,41 @@ MAV = TDM_TRAJECTORY_opt.Trajectory_Problem(mass, J, gravity, motor_dist, kf, km
 # println("Final constraint satisfaction: ", max_violation(solver))
 
 # critical_dis = zeros(N, 1)
+critical_dis_record = []
 critical_dis = 0.0
 traj_s = []
 
-# for ind in 1:N
-    # ind = 1
-    # MAV = MAVs[ind]; # local in for loop
+for ind in 1:5
+    # I. Starting point
+    x_start_dBar = RBState([5.0*rand()*rand([-1 1]),5.0*rand()*rand([-1 1]),5.0*rand(),  1.0,0.0,0.0,0.0,  0.0,0.0,0.0,  0.0,0.0,0.0])
+    MAV = TDM_TRAJECTORY_opt.Trajectory_Problem(mass, J, gravity, motor_dist, kf, km, x_start_dBar)
 
-    # global X = nothing
-    # global solver_dBar = nothing
-    # global prob_dBar = nothing
-    # global obj_dBar = nothing
+    # II. Propagation direction
+    # Φ ∈ [0, 180], Θ ∈ [0, 360] 
+    # Φ = 90*rand();  Θ = 360*rand()
+    # sin_phi, cos_phi, sin_theta, cos_theta = sind(Φ) , cosd(Φ) , sind(Θ) ,cosd(Θ)
 
-    sin_phi, cos_theta, sin_theta = √2/√3 , √2/2 ,√2/2
-    sin_phi, cos_theta, sin_theta = 1 , 1 , 0
+    sin_phi, cos_phi, sin_theta, cos_theta = √2/√3, 1/√3, √2/2, √2/2 #sind(phi), cosd(phi), sind(theta), cosd(theta)
 
     for d in 0.0:0.1:100.0
-        X, solver_dBar, prob_dBar, obj_dBar = TDM_TRAJECTORY_opt.find_d_max(MAV, hor, Nf, d, sin_phi, cos_theta, sin_theta); 
+        X, solver_dBar, prob_dBar, obj_dBar = TDM_TRAJECTORY_opt.find_d_max(MAV, hor, Nf, d, sin_phi, cos_phi, cos_theta, sin_theta); 
         println("Distance: $d; Solver status: ", solver_dBar.stats.status)
-        if Int(solver_dBar.stats.status)!= 2    
-        # Not successful
-            # global critical_dis[ind, 1] = d-0.1  
+        if Int(solver_dBar.stats.status) != 2   
+            # X, solver_dBar, prob_dBar, obj_dBar = TDM_TRAJECTORY_opt.find_d_max(MAV, hor, Nf, d+0.1, sin_phi, cos_phi, cos_theta, sin_theta);  
+            # if Int(solver_dBar.stats.status) != 2  
+                # Not successful
+                # global critical_dis[ind, 1] = d-0.1  
             global critical_dis = d-0.1 
-            # The previous trial of d is the last d makes problem converge
+                # The previous trial of d is the last d makes problem converge
             break
+            # end
         end
     end
 
-    X, solver_dBar, prob_dBar, obj_dBar = TDM_TRAJECTORY_opt.find_d_max(MAV, hor, Nf, critical_dis, sin_phi, cos_theta, sin_theta); 
+    X, solver_dBar, prob_dBar, obj_dBar = TDM_TRAJECTORY_opt.find_d_max(MAV, hor, Nf, critical_dis, sin_phi, cos_phi, cos_theta, sin_theta); 
+    println("The direction is $(sin_phi*cos_theta), $(sin_phi*sin_theta), $(cos_phi). The critical distance is: $critical_dis")
+    push!(critical_dis_record, [SVector(MAV.StateHistory[1].r), sin_phi*cos_theta, sin_phi*sin_theta, cos_phi, critical_dis])
+
     # Document the data and make plots
     traj = zeros(Nf, 3) # local in for loop
     for i in eachindex(X)
@@ -107,7 +107,17 @@ traj_s = []
 
     # plot!(traj[:,1], traj[:,2], traj[:,3],  markershape=:none, xlims=(-20,20), ylims=(-20,20), zlims=(-20,20), xlabel="x (m)", ylabel="y (m)", zlabel="z (m)")
     using DelimitedFiles
-    # writedlm("Traj_$ind.csv", traj, ", ")
-    writedlm("Traj_1.csv", traj, ", ")
+    writedlm("Traj_$ind.csv", traj, ", ")
 
-# end
+end
+
+# Document all the calculations on dBar
+a = []
+for i in eachindex(critical_dis_record)
+    this_record = [critical_dis_record[i][1][1:3]; critical_dis_record[i][2: end]]
+
+    push!(a, this_record)
+    using DelimitedFiles
+    writedlm("dBar_record.csv", a, ", ")
+end
+

@@ -8,6 +8,8 @@ using .Base_Functions
 include("../../FYP_Optimization-main/Greens_Method.jl")
 using .Greens_Method
 
+include("TDM_Functions.jl")
+
 
 
 """
@@ -26,7 +28,7 @@ Optimize the problem using the Mesh Adaptive Direct Search solver
     - 'domain_x': x domain size
     - 'domain_y': y domain size
 """
-function optimize(input, obj, cons_ext, cons_prog, N_iter, r_min, r_max)
+function optimize(input, obj, cons_ext, cons_prog, N_iter, r_min, r_max, d_lim, new_inputs, k)
 
     # Define optimization problem
     global p = DSProblem(length(input))
@@ -43,6 +45,7 @@ function optimize(input, obj, cons_ext, cons_prog, N_iter, r_min, r_max)
     end
 
     iter = 0
+
     while true
         iter += 1
         Optimize!(p)
@@ -55,19 +58,34 @@ function optimize(input, obj, cons_ext, cons_prog, N_iter, r_min, r_max)
         end
 
         if iter > 20
-            println("Loop ended with the number of iterations ($iter) over 10")
-            break
+            println("Loop ended with the number of iterations ($iter), which is more than 10")
+            # break
+            return false
         end
 
         # check if any circles are contained
-        var,new_input = check(result, r_min, r_max)
+        if length(new_inputs)==0
+            var,new_input = check(input, result, r_min, r_max, d_lim)
+        else
+            println("The length of new_inputs is: $(length(new_inputs))")
+            var,new_input = check(new_inputs[end], result, r_min, r_max, d_lim)
+        end
+        
 
         if var
-            SetInitialPoint(p, new_input)
-            BumpIterationLimit(p, i=N_iter)
-            println("Non-optimal solution (a circle is contained). REINITIALIZING...")
+            # SetInitialPoint(p, new_input)
+            # BumpIterationLimit(p, i=N_iter)
+            # println("Non-optimal solution (a circle is contained). REINITIALIZING...")
+
+            # push!(new_inputs, new_input)
+            # println("New input added in !!!!!")
+
+            # println("Epoch $(k) -> Non-optimal solution (a circle is contained). REIALLOCATED...")
+            TDM_Functions.show_epoch(make_circles(new_input), nothing)
+
+            return new_input
         else
-            println("Optimal solution found... Optimization ended at Iteration: ", iter)
+            println("Epoch $(k) -> Optimal solutions to all UAVs found... Optimization ended at Iteration: ", iter)
             break
         end
 
@@ -88,11 +106,15 @@ Checks if any Circle objects are contained by other circles, and regenerates the
     - 'domain_x': x domain size
     - 'domain_y': y domain size
 """
-function check(output, r_min, r_max)
+function check(input, output, r_min, r_max, d_lim)
+    input_circles = make_circles(input)
     output_circles = make_circles(output)
-    N = length(output_circles)
+
+    N = length(output_circles) # input and output should have the same number of circles
 
     is_contained = Vector{Bool}([false for i in 1:N])
+    # is_pure_contained = Vector{Bool}([false for i in 1:N])
+    no_movement = Vector{Bool}([false for i in 1:N])
 
     for i in 1:N
         for j in i+1:N
@@ -104,17 +126,37 @@ function check(output, r_min, r_max)
         end
     end
 
-    if any(is_contained)
-        allowed_displacement = 1
+    for i in 1:N
+        # for j in i+1:N
+        if output_circles[i].R<=input_circles[i].R || 
+            (output_circles[i].x==input_circles[i].x && output_circles[i].y==input_circles[i].y)
+            no_movement[i] = true
+        end
+        # end
+    end
+
+    # for i in eachindex(output_circles)
+    #     if Base_Functions.pure_contained(output_circles[i], input_circles[i]) !== nothing
+    #         # Base_Functions.pure_contained(pre_optimized_circles[i], this_group[i]) !== nothing
+    #         # return false
+    #         is_pure_contained[i] = true
+    #     end
+    # end
+
+    if any(is_contained) || any(no_movement)
+    # if any(is_contained)
+        println("is_contained: ",is_contained)
+        println("no_movement: ",no_movement)
+        # println("is_pure_contained: ",is_pure_contained)
+        # allowed_displacement = 1
         FOV = 80 * pi/180
         for i in 1:N
             # if circle is contained, regenerate it (randomly)
-            if is_contained[i] == true
+            if is_contained[i] == true || no_movement[i] == true 
 
                 # output[i] = rand(R_lim:domain_x-R_lim)[1]       # x
                 # output[N + i] = rand(R_lim:domain_y-R_lim)[1]   # y
                 # output[2*N + i] = rand(1:R_lim)[1]              # R of UAV circle
-
 
                 # this_distance =  (cir_domain.R - r_max) * rand()
                 # this_angle = 2*π*rand()
@@ -123,12 +165,14 @@ function check(output, r_min, r_max)
                 # output[N + i] = this_distance * sin(this_angle)   # y
                 # output[2*N + i] = r_max * rand()                  # R of UAV circle
 
-                
-                variation = - allowed_displacement/2 + allowed_displacement*rand()
-                output[i] = output[i] + variation                             # x
-                output[N + i] = output[N + i] + variation                     # y
-                output[2*N + i] = output[2*N + i] + variation *tan(FOV/2)     # R
+                # direction = [output[i], output[N+i], output[2*N+i]/tan(FOV/2)]/sqrt(output[i]^2+output[N+i]^2+(output[2*N+i]/tan(FOV/2))^2)
+                direction = [output[i], output[N+i], output[2*N+i]/tan(FOV/2)]/sqrt((output[i])^2 + (output[N+i])^2+ (output[2*N+i]/tan(FOV/2))^2)
+                increment = d_lim *direction
 
+                # variation = - allowed_displacement/2 + allowed_displacement*rand()
+                output[i] = output[i] + increment[1]                             # x
+                output[N + i] = output[N + i] + increment[2]                    # y
+                output[2*N + i] = min(output[2*N + i] + increment[3] *tan(FOV/2) *0.9 ,  r_max)   # R
 
             end
         end

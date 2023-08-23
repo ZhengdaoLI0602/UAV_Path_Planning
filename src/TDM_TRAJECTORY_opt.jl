@@ -89,14 +89,14 @@ end
 
 Returns the X(predicted states), prob (problem object), obj (objective function object) of the d bar determination
 """
-function find_d_max(MAV, tf::Float64, Nf::Int64, d::Float64, sin_phi, cos_theta, sin_theta)
+function find_d_max(MAV, tf::Float64, Nf::Int64, d::Float64, sin_phi, cos_phi, cos_theta, sin_theta)
     n,m = size(MAV.Model)       # n: number of states 13; m: number of controls 4
     num_states = n
 
     # xf = SVector(MAV.StateHistory[end]); # however it is the given x0, 20230810
-    weight_Q = 1e-10
-    weigth_R = 1e-10
-    weigth_Qf = 1.0
+    weight_Q = 1.0 #1e-10
+    weigth_R = 1.0 #1e-10
+    weigth_Qf = 5.0
     Q = Diagonal(@SVector fill(weight_Q, num_states))
     # Q = Diagonal(SA[weight_Q, weight_Q, weight_Q, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
     R = Diagonal(@SVector fill(weigth_R, m))
@@ -106,25 +106,32 @@ function find_d_max(MAV, tf::Float64, Nf::Int64, d::Float64, sin_phi, cos_theta,
 
     # x0 = [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN];
 
-    # x0 = SVector(MAV.StateHistory[end])
-    x0 = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
-    xf = [x0[1]+ d*sin_phi*cos_theta, x0[2]+ d*sin_phi*sin_theta, x0[3]+ d*cos_theta, 
+    x0 = SVector(MAV.StateHistory[end])
+    # x0 = [-1.0, 1.0, 2.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    xf = [x0[1]+ d*sin_phi*cos_theta, x0[2]+ d*sin_phi*sin_theta, x0[3]+ d*cos_phi, 
           1.0, 0.0, 0.0, 0.0, 
           0.0, 0.0, 0.0, 
           0.0, 0.0, 0.0];
 
-
-
-
     obj = LQRObjective(Q, R, Qf, xf, Nf)  # only about the 3D position
 
     cons = ConstraintList(num_states, m, Nf)
-    x_min = [-50.0,-50.0,0.0,  -2.0,-2.0,-2.0,-2.0,  -5.0,-5.0,-5.0,  -1.5,-1.5,-1.5]
-    x_max = [50.0,50.0,50.0,  2.0,2.0,2.0,2.0,  5.0,5.0,5.0,  1.5,1.5,1.5]
+    # x_min = [-50.0,-50.0,0.0,  -2.0,-2.0,-2.0,-2.0,  -2.0,-2.0,-2.0,  -1.0,-1.0,-1.0]
+    # x_max = [50.0,50.0,100.0,  2.0,2.0,2.0,2.0,  2.0,2.0,2.0,  1.0,1.0,1.0]
+    # x_min = [-1e4,-1e4,0.0,  -2.0,-2.0,-2.0,-2.0,  -2.0,-2.0,-2.0,  -1.0,-1.0,-1.0]
+    # x_max = [1e4,1e4,100.0,  2.0,2.0,2.0,2.0,  2.0,2.0,2.0,  1.0,1.0,1.0]
+    # x_min = [-1e4,-1e4,0.0,  -2.0,-2.0,-2.0,-2.0,  -5.0,-5.0,-5.0,  -1.5,-1.5,-1.5]
+    # x_max = [1e4,1e4,100.0,  2.0,2.0,2.0,2.0,  5.0,5.0,5.0,  1.5,1.5,1.5]
+
+    # x_min = [-1e4,-1e4,0.0,  -2.0,-2.0,-2.0,-2.0,  -1.5*10,-1.5*10,-1.5*10,  -1.0*10,-1.0*10,-1.0*10]
+    # x_max = [1e4,1e4,100.0,  2.0,2.0,2.0,2.0,  1.5*10,1.5*10,1.5*10,  1.0*10,1.0*10,1.0*10]
+    x_min = [-50.0,-50.0,0.0,  -2.0,-2.0,-2.0,-2.0,  -2.0,-2.0,-2.0,  -1.0,-1.0,-1.0]
+    x_max = [50.0,50.0,100.0,  2.0,2.0,2.0,2.0,  2.0,2.0,2.0,  1.0,1.0,1.0]
     add_constraint!(cons, BoundConstraint(n, m, x_min=x_min, x_max=x_max), 1:Nf-1)
 
 
     prob = Problem(MAV.Model, obj, x0, tf, xf=xf, constraints=cons);
+    # prob = Problem(MAV.Model, obj, x0, tf, xf=xf);
     # prob = Problem(MAV.Model, obj; xf=xf, tf=tf, constraints=cons);
 
     # zero_SV = zeros(MAV.Model)[1]
@@ -141,13 +148,13 @@ function find_d_max(MAV, tf::Float64, Nf::Int64, d::Float64, sin_phi, cos_theta,
     initial_states!(prob, state_guess)
     initial_controls!(prob, control_guess)
 
-    rollout!(prob);   # simulate the system forward in time with the new controls
+    # rollout!(prob);   # simulate the system forward in time with the new controls
 
     solver = ALTROSolver(prob);
 
     # opts = SolverOptions()
     # opts.cost_tolerance = 1e-5
-    # solver = ALTROSolver(prob,show_summary=false);
+    solver = ALTROSolver(prob,show_summary=false);
 
     solve!(solver);
 
@@ -196,13 +203,27 @@ function optimize(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, Nm::Int64, co
     # Constraints
     cons = ConstraintList(n, m, Nt)
 
-    # # modified after 2023.08.09
-    # x_min = [-50.0,-50.0,0.0,  -2.0,-2.0,-2.0,  -5.0,-5.0,-5.0,  -1.5,-1.5,-1.5]
-    # x_max = [50.0,50.0,50.0,  2.0,2.0,2.0,  5.0,5.0,5.0,  1.5,1.5,1.5]
+    
+       
 
-    x_min = [-100.0,-100.0,0.0,-2.0,-2.0,-2.0,-2.0,-5.0,-5.0,-5.0,-1.5,-1.5,-1.5] 
+    # # modified after 2023.08.09
+    x_min = [-50.0,-50.0,0.0,  -2.0,-2.0,-2.0,-2.0,  -2.0,-2.0,-2.0,  -1.0,-1.0,-1.0]
+    x_max = [50.0,50.0, 100.0,  2.0,2.0,2.0,2.0,  2.0,2.0,2.0,  1.0,1.0,1.0]
+    # x_min = [-100.0,-100.0,0.0,  -2.0,-2.0,-2.0,-2.0,  -5.0,-5.0,-5.0,  -1.5,-1.5,-1.5]
+    # x_max = [100.0,100.0,100.0,  2.0,2.0,2.0,2.0,  5.0,5.0,5.0,  1.5,1.5,1.5]
+
+    # x_min = [-1e4,-1e4,0.0,  -2.0,-2.0,-2.0,-2.0,  -1.5,-1.5,-1.5,  -1.0,-1.0,-1.0]
+    # x_max = [1e4,1e4,100.0,  2.0,2.0,2.0,2.0,  1.5,1.5,1.5,  1.0,1.0,1.0]
+
+    # x_min = [-1e4,-1e4,0.0,  -2.0,-2.0,-2.0,-2.0,  -1.5*10,-1.5*10,-1.5*10,  -1.0*10,-1.0*10,-1.0*10]
+    # x_max = [1e4,1e4,100.0,  2.0,2.0,2.0,2.0,  1.5*10,1.5*10,1.5*10,  1.0*10,1.0*10,1.0*10]
+    # x_min = [-1e4,-1e4,0.0,  -2.0,-2.0,-2.0,-2.0,  -5.0,-5.0,-5.0,  -1.5,-1.5,-1.5]
+    # x_max = [1e4,1e4,100.0,  2.0,2.0,2.0,2.0,  5.0,5.0,5.0,  1.5,1.5,1.5]
+
+    # x_min = [-100.0,-100.0,0.0,-2.0,-2.0,-2.0,-2.0,-5.0,-5.0,-5.0,-1.5,-1.5,-1.5]
+    # x_max = [100.0,100.0,100.0,2.0,2.0,2.0,2.0,5.0,5.0,5.0,1.5,1.5,1.5]
     # target limits for different variables (positions; orientations; velocity; angular velocity)
-    x_max = [100.0,100.0,100.0,2.0,2.0,2.0,2.0,5.0,5.0,5.0,1.5,1.5,1.5]
+    
 
     add_constraint!(cons, BoundConstraint(n,m, x_min=x_min, x_max=x_max), 1:Nt-1)
 
@@ -236,7 +257,9 @@ function optimize(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, Nm::Int64, co
     initial_states!(prob, state_guess)
     initial_controls!(prob, control_guess)
     
-    altro = ALTROSolver(prob)
+    # altro = ALTROSolver(prob)
+
+    altro = ALTROSolver(prob,show_summary=false);
 
     solve!(altro);
 

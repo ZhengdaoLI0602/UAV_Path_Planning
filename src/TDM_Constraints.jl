@@ -30,6 +30,18 @@ end
 #     return true
 # end
 
+function cons2(x)
+    this_group = Base_Functions.make_circles(x)
+    
+    for i in eachindex(this_group)
+        if Base_Functions.pure_contained(this_group[i], pre_optimized_circles[i]) !== nothing
+            # Base_Functions.pure_contained(pre_optimized_circles[i], this_group[i]) !== nothing
+            return false
+        end
+    end
+    return true
+end
+
 
 # Progressive Constraint 3: Limits on the displacement between "pre-optimized" and "post-optimized" position for each UAV
 function cons3(x)
@@ -48,26 +60,24 @@ function cons3(x)
             return false
         end
     end
-
-    # for pre in pre_optimized_circles
-    #     x1 = pre.x
-    #     y1 = pre.y
-    #     z1 = pre.R 
-    #     # z1 = pre.R / tan(FOV/2)
-
-    #     for post in this_group
-    #         x2 = post.x
-    #         y2 = post.y
-    #         z2 = post.R 
-    #         # z2 = post.R / tan(FOV/2)
-
-    #         if sqrt((x1-x2)^2+(y1-y2)^2+(z1-z2)^2) > d_lim
-    #             return false
-    #         end
-    #     end
-    # end
     return true
 end
+
+
+function cons4(x)
+    this_group = Base_Functions.make_circles(x)
+    N = length(this_group)
+
+    for i in 1:N
+        for j in i+1:N
+            if this_group[i].R >5* this_group[j].R || this_group[j].R >5* this_group[i].R
+                return false
+            end
+        end
+    end
+    return true
+end
+
 
 
 
