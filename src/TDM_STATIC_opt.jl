@@ -28,7 +28,7 @@ Optimize the problem using the Mesh Adaptive Direct Search solver
     - 'domain_x': x domain size
     - 'domain_y': y domain size
 """
-function optimize(input, obj, cons_ext, cons_prog, N_iter, r_min, r_max, d_lim, new_inputs, k)
+function optimize(input, obj, cons_ext, cons_prog, N_iter, r_min, r_max, d_lim, new_inputs, k, circles_pool)
 
     # Define optimization problem
     global p = DSProblem(length(input))
@@ -64,12 +64,12 @@ function optimize(input, obj, cons_ext, cons_prog, N_iter, r_min, r_max, d_lim, 
         end
 
         # check if any circles are contained
-        if length(new_inputs)==0
-            var,new_input = check(input, result, r_min, r_max, d_lim)
-        else
-            println("The length of new_inputs is: $(length(new_inputs))")
-            var,new_input = check(new_inputs[end], result, r_min, r_max, d_lim)
-        end
+        # if length(new_inputs)==0
+        var,new_input = check(input, result, r_min, r_max, d_lim, circles_pool)
+        # else
+        #     println("The length of new_inputs is: $(length(new_inputs))")
+        #     var,new_input = check(new_inputs[end], result, r_min, r_max, d_lim, circles_pool)
+        # end
         
 
         if var
@@ -106,7 +106,7 @@ Checks if any Circle objects are contained by other circles, and regenerates the
     - 'domain_x': x domain size
     - 'domain_y': y domain size
 """
-function check(input, output, r_min, r_max, d_lim)
+function check(input, output, r_min, r_max, d_lim, circles_pool)
     input_circles = make_circles(input)
     output_circles = make_circles(output)
 
@@ -149,31 +149,51 @@ function check(input, output, r_min, r_max, d_lim)
         println("no_movement: ",no_movement)
         # println("is_pure_contained: ",is_pure_contained)
         # allowed_displacement = 1
-        FOV = 80 * pi/180
+        global FOV = 80 /180 *pi
         for i in 1:N
             # if circle is contained, regenerate it (randomly)
             if is_contained[i] == true || no_movement[i] == true 
+                # # variation = - allowed_displacement/2 + allowed_displacement*rand()
 
-                # output[i] = rand(R_lim:domain_x-R_lim)[1]       # x
-                # output[N + i] = rand(R_lim:domain_y-R_lim)[1]   # y
-                # output[2*N + i] = rand(1:R_lim)[1]              # R of UAV circle
+                global success = true
+                for angle in 1:1:360
+                    success = true
+                    movement = 0.9*d_lim
 
-                # this_distance =  (cir_domain.R - r_max) * rand()
-                # this_angle = 2*π*rand()
+                    this_x = output[i] + movement * √2/√3 * cosd(angle)
+                    this_y = output[N + i] + movement * √2/√3 * sind(angle)
+                    this_r = output[2*N + i] + movement * 1/√3 * tan(FOV/2)
 
-                # output[i] = this_distance * cos(this_angle)       # x
-                # output[N + i] = this_distance * sin(this_angle)   # y
-                # output[2*N + i] = r_max * rand()                  # R of UAV circle
+                    global this_circle = Base_Functions.make_circles([this_x, this_y, this_r])
+    
+                    for m in eachindex(circles_pool)
+                        if Base_Functions.intersection(this_circle[1], circles_pool[m]) !== nothing ||
+                            Base_Functions.contained(this_circle[1], circles_pool[m]) !== nothing
+                            success =  false
+                            break
+                        end
+                    end
 
-                # direction = [output[i], output[N+i], output[2*N+i]/tan(FOV/2)]/sqrt(output[i]^2+output[N+i]^2+(output[2*N+i]/tan(FOV/2))^2)
-                direction = [output[i], output[N+i], output[2*N+i]/tan(FOV/2)]/sqrt((output[i])^2 + (output[N+i])^2+ (output[2*N+i]/tan(FOV/2))^2)
-                increment = d_lim *direction
+                    if success == true
+                        output[i] = this_x
+                        output[N + i] = this_y
+                        output[2*N + i] = this_r
+                        println("Reallocate successful!")
+                        break
+                    end
+                end
 
-                # variation = - allowed_displacement/2 + allowed_displacement*rand()
-                output[i] = output[i] + increment[1]                             # x
-                output[N + i] = output[N + i] + increment[2]                    # y
-                output[2*N + i] = min(output[2*N + i] + increment[3] *tan(FOV/2) *0.9 ,  r_max)   # R
 
+                if success == false
+                    println("Reallocate fail! Interpolate ourwards!")
+                    # direction = [output[i], output[N+i], output[2*N+i]/tan(FOV/2)]/sqrt(output[i]^2+output[N+i]^2+(output[2*N+i]/tan(FOV/2))^2)
+                    direction = [output[i], output[N+i], output[2*N+i]/tan(FOV/2)]/sqrt((output[i])^2 + (output[N+i])^2+ (output[2*N+i]/tan(FOV/2))^2)
+                    increment = d_lim *direction
+
+                    output[i] = output[i] + increment[1]                             # x
+                    output[N + i] = output[N + i] + increment[2]                    # y
+                    output[2*N + i] = min(output[2*N + i] + increment[3] *tan(FOV/2) *0.9 ,  r_max)   # R
+                end
             end
         end
 

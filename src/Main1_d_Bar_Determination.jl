@@ -15,8 +15,6 @@ gravity = SVector(0,0,-9.81)                     # gravity vector # default SVec
 motor_dist = 0.1750                              # distance between motors
 kf = 1.0                                         # motor force constant (motor force = kf*u) # default 1.0
 km = 0.0245                                      # motor torque constant (motor torque = km*u) # default 0.0245
-# r_max = 100 * tand(80/2)
-# N = 5                                            # number of UAVs
 
 
 # MPC optimization
@@ -64,22 +62,26 @@ tf = hor            # for testing on 20230809
 critical_dis_record = []
 critical_dis = 0.0
 traj_s = []
+# global sin_phi, cos_phi, sin_theta, cos_theta = √2/√3, 1/√3, √2/2, √2/2 #sind(phi), cosd(phi), sind(theta), cosd(theta)
+global sin_phi, cos_phi, sin_theta, cos_theta = 1, 0, √2/2, √2/2 #sind(phi), cosd(phi), sind(theta), cosd(theta)
+
 
 for ind in 1:5
     # I. Starting point
-    x_start_dBar = RBState([5.0*rand()*rand([-1 1]),5.0*rand()*rand([-1 1]),5.0*rand(),  1.0,0.0,0.0,0.0,  0.0,0.0,0.0,  0.0,0.0,0.0])
-    MAV = TDM_TRAJECTORY_opt.Trajectory_Problem(mass, J, gravity, motor_dist, kf, km, x_start_dBar)
+    # x_start_dBar = RBState([0.0,0.0,0.0,  1.0,0.0,0.0,0.0,  0.0,0.0,0.0,  0.0,0.0,0.0])
+
+    local x_start_dBar = RBState([5.0*rand()*rand([-1 1]),5.0*rand()*rand([-1 1]),5.0*rand(),  1.0,0.0,0.0,0.0,  0.0,0.0,0.0,  0.0,0.0,0.0])
+    local MAV = TDM_TRAJECTORY_opt.Trajectory_Problem(mass, J, gravity, motor_dist, kf, km, x_start_dBar)
 
     # II. Propagation direction
     # Φ ∈ [0, 180], Θ ∈ [0, 360] 
     # Φ = 90*rand();  Θ = 360*rand()
     # sin_phi, cos_phi, sin_theta, cos_theta = sind(Φ) , cosd(Φ) , sind(Θ) ,cosd(Θ)
 
-    sin_phi, cos_phi, sin_theta, cos_theta = √2/√3, 1/√3, √2/2, √2/2 #sind(phi), cosd(phi), sind(theta), cosd(theta)
 
-    for d in 0.0:0.1:100.0
-        X, solver_dBar, prob_dBar, obj_dBar = TDM_TRAJECTORY_opt.find_d_max(MAV, hor, Nf, d, sin_phi, cos_phi, cos_theta, sin_theta); 
-        println("Distance: $d; Solver status: ", solver_dBar.stats.status)
+    for d in 16.9:0.1:100.0
+        local X, x0, xf, solver_dBar, prob_dBar, obj_dBar = TDM_TRAJECTORY_opt.find_d_max(MAV, hor, Nf, d, sin_phi, cos_phi, sin_theta, cos_theta); 
+        println("From: $(x0[1:3]), To: $(xf[1:3])"," Distance: $d; Solver status: ", solver_dBar.stats.status)
         if Int(solver_dBar.stats.status) != 2   
             # X, solver_dBar, prob_dBar, obj_dBar = TDM_TRAJECTORY_opt.find_d_max(MAV, hor, Nf, d+0.1, sin_phi, cos_phi, cos_theta, sin_theta);  
             # if Int(solver_dBar.stats.status) != 2  
@@ -92,12 +94,18 @@ for ind in 1:5
         end
     end
 
-    X, solver_dBar, prob_dBar, obj_dBar = TDM_TRAJECTORY_opt.find_d_max(MAV, hor, Nf, critical_dis, sin_phi, cos_phi, cos_theta, sin_theta); 
+    global X, x0, xf, solver_dBar, prob_dBar, obj_dBar = TDM_TRAJECTORY_opt.find_d_max(MAV, hor, Nf, critical_dis, sin_phi, cos_phi,  sin_theta, cos_theta); 
+    println("From: $(x0[1:3]), To: $(xf[1:3])"," Distance: $critical_dis; Solver status: ", solver_dBar.stats.status)
+
+    local positions_store = [x0[1:3]; xf[1:3]]
+    # using DelimitedFiles
+    # writedlm("Traj_$ind.csv", traj, ", ")
+
     println("The direction is $(sin_phi*cos_theta), $(sin_phi*sin_theta), $(cos_phi). The critical distance is: $critical_dis")
     push!(critical_dis_record, [SVector(MAV.StateHistory[1].r), sin_phi*cos_theta, sin_phi*sin_theta, cos_phi, critical_dis])
 
     # Document the data and make plots
-    traj = zeros(Nf, 3) # local in for loop
+    local traj = zeros(Nf, 3) # local in for loop
     for i in eachindex(X)
         traj[i,1] = X[i][1]
         traj[i,2] = X[i][2]
@@ -108,16 +116,74 @@ for ind in 1:5
     # plot!(traj[:,1], traj[:,2], traj[:,3],  markershape=:none, xlims=(-20,20), ylims=(-20,20), zlims=(-20,20), xlabel="x (m)", ylabel="y (m)", zlabel="z (m)")
     using DelimitedFiles
     writedlm("Traj_$ind.csv", traj, ", ")
-
 end
+
+
+include("TDM_Functions.jl")
+include("TDM_Trajectory_Opt.jl")
+x_start_dBar = RBState([0.0,0.0,0.0,  1.0,0.0,0.0,0.0,  0.0,0.0,0.0,  0.0,0.0,0.0])
+# x_start_dBar = RBState([5.0*rand()*rand([-1 1]),5.0*rand()*rand([-1 1]),5.0*rand(),  1.0,0.0,0.0,0.0,  0.0,0.0,0.0,  0.0,0.0,0.0])
+MAV = TDM_TRAJECTORY_opt.Trajectory_Problem(mass, J, gravity, motor_dist, kf, km, x_start_dBar)
+# sin_phi, cos_phi, sin_theta, cos_theta = √2/√3, 1/√3, √2/2, √2/2 #sind(phi), cosd(phi), sind(theta), cosd(theta)
+global sin_phi, cos_phi, sin_theta, cos_theta = 1, 0, √2/2, √2/2 #sind(phi), cosd(phi), sind(theta), cosd(theta)
+
+X, x0, xf, solver_dBar, prob_dBar, obj_dBar = TDM_TRAJECTORY_opt.find_d_max(MAV, hor, Nf, 2.0, sin_phi, cos_phi,  sin_theta, cos_theta); 
+println("Chosen starting point: $(x0[1:3])")
+println("Chosen destination: $(xf[1:3])")
+println(" Distance: $critical_dis; Solver status: ", solver_dBar.stats.status)
+
+# Document the data and make plots
+traj = zeros(Nf, 3) # local in for loop
+for i in eachindex(X)
+    traj[i,1] = X[i][1]
+    traj[i,2] = X[i][2]
+    traj[i,3] = X[i][3]
+end
+push!(traj_s, traj)
+# plot!(traj[:,1], traj[:,2], traj[:,3],  markershape=:none, xlims=(-20,20), ylims=(-20,20), zlims=(-20,20), xlabel="x (m)", ylabel="y (m)", zlabel="z (m)")
+using DelimitedFiles
+writedlm("Traj_1.csv", traj, ", ")
+
+
+
+
+
+
+
+
+p = plot()
+palette = ["blue", "orange", "green", "purple", "cyan", "pink", "gray", "olive"]
+scal = 15
+for ind in eachindex(traj_s)
+    this_traj = traj_s[ind]
+    this_color = palette[mod1(ind, length(palette))]
+    plot!(this_traj[:,1], this_traj[:,2], this_traj[:,3],
+        linewidth = 3,
+        color = this_color, 
+        label="Test $ind",
+        # aspect_ratio=1, 
+        # aspectmode="cube",
+        xlims=(-scal,scal), ylims=(-scal,scal), zlims=(0,scal),
+        xlabel="x [m]", xguidefontsize=15,
+        ylabel="y [m]", yguidefontsize=15,
+        zlabel="z [m]", zguidefontsize=15,
+        size=(800, 600),
+        camera=(270, 90),
+    )
+end
+plot!(grid = true, gridwidth = 3,legend=:topright,legendfontsize=12)
+
+Plots.savefig("Step1.pdf")
+
 
 # Document all the calculations on dBar
 a = []
 for i in eachindex(critical_dis_record)
     this_record = [critical_dis_record[i][1][1:3]; critical_dis_record[i][2: end]]
-
     push!(a, this_record)
     using DelimitedFiles
     writedlm("dBar_record.csv", a, ", ")
 end
+
+
 

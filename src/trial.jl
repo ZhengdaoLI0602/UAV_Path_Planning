@@ -67,10 +67,78 @@
 # end
 
 
+# include("TDM_Functions.jl")
+
+# a = TDM_Functions.Domains_Problem([],20.0,2.0)
+# a.domain_expand()
+
+
+
+include("../../FYP_Optimization-main/Base_Functions.jl")
+# using .Base_Functions
+include("../../FYP_Optimization-main/Greens_Method.jl")
+# using .Greens_Method
+include("../../FYP_Optimization-main/Plotter.jl")
+using Random
 include("TDM_Functions.jl")
 
-a = TDM_Functions.Domains_Problem([],20.0,2.0)
-a.domain_expand()
+
+
+M = 5               # (user-defined) Total number of map updates 
+N = 5               # (user-defined) Total number of UAVs 
+R1 = 100.0            # (user-defined) Initial radius 
+ΔR = 5.0              # Expanding rate: 2m/update
+FOV = 80/180*π      # FOV in radians
+h_min = 1           # (user-defined, replaced later) Flying altitude lower bound (exclude initialization)
+h_max = 20         # Flying altitude upper bound
+r_min = h_min * tan(FOV/2) # (user-defined, replaced later)
+# r_min = 0           # (user-defined, replaced later)
+r_max = h_max * tan(FOV/2) 
+d_lim = 17.5 #critical_dis           # (user-defined) limitations on displacement of group UAV induced from optimization 
+N_iter = 100        # (use-defined) set the limit of iterations for coverage maximization
+
+
+
+global STATIC_input = TDM_Functions.allocate_even_circles(5.0, N, 5.0)
+
+circles_pool = Base_Functions.make_circles(STATIC_input) 
+using Plots
+plotlyjs()
+plot()
+TDM_Functions.show_epoch(circles_pool, cir_domain.Domain_History[1])
+
+
+
+global count = 0
+global success = true
+for angle in 1:1:360
+    success = true
+
+    movement = 0.9*d_lim
+    this_x = 0.0 + movement * cosd(angle)
+    this_y = 0.0 + movement * sind(angle)
+    this_r = 5.0
+    global this_circle = Base_Functions.make_circles([this_x, this_y, this_r])
+
+    for m in eachindex(circles_pool)
+        if Base_Functions.intersection(this_circle[1], circles_pool[m]) !== nothing ||
+            Base_Functions.contained(this_circle[1], circles_pool[m]) !== nothing
+            success =  false
+            break
+        end
+    end
+
+    if success == true
+        println("Success!")
+        count += 1
+    end
+end
+
+global success = true
+for i =1:2
+    success = false
+end
+println(success)
 
 
 
@@ -80,12 +148,10 @@ a.domain_expand()
 
 
 
+# random five circles
+global STATIC_input = [-0.39202819916964404,34.872393940656,5.5239352511433015,-29.73691435996299,-22.73383564724028,
+                    3.113693723318892,10.794042832857249,-2.3783477662587384,27.63667034017559,-1.1279665973334239,
+                    5.025207348818531,4.676120462178847,8.538346582322927,1.6090792603854056,2.0937907421476356]
 
 
-
-
-
-
-
-
-
+                    

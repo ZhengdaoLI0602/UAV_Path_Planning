@@ -188,35 +188,84 @@ end
 
 
 
+# p = plot(x, y, z,
+#          title = "3D Spiral Plot",
+#          xlabel = "X-axis Label",
+#          ylabel = "Y-axis Label",
+#          zlabel = "Z-axis Label",
+#          linewidth = 2,       # Line width
+#          linecolor = :blue,   # Line color
+#          grid = true,         # Display grid
+#          gridwidth = 3,
+#          legend = false,      # Hide legend
+#          camera = (45, 20),
+#          size=(650, 600),
+#          )   # Adjust camera angle for a good view
+# display(p)
 
 
+plot()
+this_X = Xs[1]
+plot!(this_X[1][:,1],this_X[1][:,2],this_X[1][:,3])
 
 
 # Plot trajectories
 using Plots
-
 # Static 3D plot
-p = plot(legend=:outertopright, minorgrid=true, minorgridalpha=0.25)
+# p = plot(legend=:outertopright, minorgrid=true, minorgridalpha=0.25)
+# plot()
+p = plot()
 palette = ["blue", "orange", "green", "purple", "cyan", "pink", "gray", "olive"]
-for j in 1:3 #eachindex(Xs)
-    this_X = Xs[j]
-    for i in 1:N
-        this_color = palette[mod1(i,length(palette))]
-        if j==1
-            plot!(this_X[i][:,1],this_X[i][:,2],this_X[i][:,3], 
-            color = this_color, markershape=:none, label="MAV $i", 
-            grid = true,
-            xlims=(-50,50), ylims=(-50,50), zlims=(0,100), 
-            xlabel="x (m)", ylabel="y (m)", zlabel="z (m)")
-        else
-            plot!(this_X[i][:,1],this_X[i][:,2],this_X[i][:,3], 
-            color = this_color, markershape=:none, label=:none ,
-            grid = true,
-            xlims=(-50,50), ylims=(-50,50), zlims=(0,100), 
-            xlabel="x (m)", ylabel="y (m)", zlabel="z (m)")
-        end
-    end
-end
+scal = 160
+
+
+# p=plot()
+# for i in 1:N
+#     # i = 5
+#     local this_color = palette[mod1(i,length(palette))]
+#     this_xs = []
+#     this_ys = []
+#     this_zs = []
+#     for k = 1:M
+#         this_traj = Xs[k][i]
+#         push!(this_xs, this_traj[:,1])
+#         push!(this_ys, this_traj[:,2])
+#         push!(this_zs, this_traj[:,3])
+#     end
+#     # i = 1
+#     plot!(this_xs, this_ys, this_zs,
+#         linewidth = 2,
+#         color =:"blue",
+#         label="MAV $i",
+#         # aspect_ratio= 1,
+#     )
+#     if i == N
+#         plot!(legend=:topright,
+#             legendfontsize=10,
+#             grid = true,
+#             gridwidth = 3,
+#             xlims=(-scal,scal), ylims=(-scal,scal), zlims=(0,40), 
+#             xlabel="x [m]", xguidefontsize=15,
+#             ylabel="y [m]", yguidefontsize=15,
+#             zlabel="z [m]", zguidefontsize=15,
+#             size=(800, 600),
+#             camera=(45, 20), 
+#         )
+#     end
+# end
+
+
+# ang = 0:0.1:2*pi
+# x = 100*sin.(ang)
+# y = 100*cos.(ang)
+# f(x, y) = sqrt(200^2 -x^2 - y^2)
+# z = [f(x, y) for x in x, y in y]
+
+# # 3D Surface Plot with improved quality
+# plot!(Plots.surface(x, y, z, linewidth=0.5, linealpha=0.8, linecolor=:black, alpha=0.8),
+#          legend=:none,
+#          camera=(60, 30))
+# Plots.savefig(p, "aaa.pdf")
 
 # Animation plot
 # anim = @animate for i in 1:longest
@@ -230,3 +279,86 @@ end
 # end
 
 # gif(anim,fps=10)
+
+
+
+
+# using Plots
+# plotlyjs()
+
+# If x, y, z are vectors then it won't generate a surface
+# for a parameterized surface x,y,z should be matrices:
+# Check for: typeof(X), typeof(Y), typeof(Z)
+r = 100 + M*5
+h = h_max
+m, n =200, 200
+u = range(0, 2pi, length=m)
+v = range(0, h, length=n)
+us = ones(m)*u'
+vs = v*ones(n)'
+#Surface parameterization
+X = r*cos.(us)
+Y = r*sin.(us)
+Z = vs
+Plots.surface(X, Y, Z, size=(600,600), 
+    cbar=:none, 
+    legend=false,
+    colorscale="Reds",
+    linewidth=0.5, 
+    linealpha=0.4,
+    alpha=0.4, 
+    # linecolor=:red,
+    camera = (45, 10), 
+    )
+
+for j in eachindex(Xs)                         # epoch index
+    local this_X = Xs[j]
+    for i in 1:N                                # UAV index
+        local this_color = palette[mod1(i,length(palette))]
+        if j!= M
+            plot!(this_X[i][:,1],this_X[i][:,2],this_X[i][:,3],
+                linewidth = 2,
+                color = this_color, 
+                label=:none, 
+            )
+        else
+            plot!(this_X[i][:,1],this_X[i][:,2],this_X[i][:,3], 
+                linewidth = 2,
+                color = this_color,
+                label="UAV $i",
+                xlims=(-scal,scal), ylims=(-scal,scal), zlims=(0,30), 
+                xlabel="x [m]", xguidefontsize=15,
+                ylabel="y [m]", yguidefontsize=15,
+                zlabel="z [m]", zguidefontsize=15,
+                size=(800, 600),
+                camera=(45, 30),
+            )
+        end
+    end
+end
+
+plot!(grid = true, gridwidth = 3, legend=:topright,legendfontsize=10)
+
+
+Plots.savefig("3d_plot.pdf")
+
+
+# TESTING......................
+# using Plots
+# plotlyjs()
+
+# # Sample 3D data
+# x = y = -50:0.25:50
+# f(x, y) = sin(sqrt(x^2 + y^2))
+# z = [f(x, y) for x in x, y in y]
+
+# # 3D Surface Plot with improved quality
+# p = plot(Plots.surface(x, y, z, linewidth=0.5, linealpha=0.8, linecolor=:black, alpha=0.8),
+#          title="3D Surface Plot",
+#          xlabel="X-axis", ylabel="Y-axis", zlabel="Z Value",
+#          legend=false,
+#          camera=(60, 30))  # Adjust camera angle for better view
+
+# # You can also save the plot with a higher resolution
+# savefig(p, "3d_plot.png", dpi=300)
+
