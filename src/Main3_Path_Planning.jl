@@ -38,42 +38,42 @@ for i in 1:length(history_input_pb), j in 1:N
     my_time[i,j] = []
 end
 
-no_movement = []
-for i in eachindex(history_input_pb)
-    if i!=length(history_input_pb)
-        this_circles = history_input_pb[i].circles
-        next_circles = history_input_pb[i+1].circles
-        for ind = eachindex(this_circles)
-            if this_circles[ind].x == next_circles[ind].x &&
-                this_circles[ind].y == next_circles[ind].y &&
-                this_circles[ind].R == next_circles[ind].R
-                push!(no_movement, ind)
-            end
-        end
-    end
-end
+# no_movement = []
+# for i in eachindex(history_input_pb)
+#     if i!=length(history_input_pb)
+#         this_circles = history_input_pb[i].circles
+#         next_circles = history_input_pb[i+1].circles
+#         for ind = eachindex(this_circles)
+#             if this_circles[ind].x == next_circles[ind].x &&
+#                 this_circles[ind].y == next_circles[ind].y &&
+#                 this_circles[ind].R == next_circles[ind].R
+#                 push!(no_movement, ind)
+#             end
+#         end
+#     end
+# end
 
-history_input_pb_backup = history_input_pb
-history_output_pb_backup = history_output_pb
+# history_input_pb_backup = history_input_pb
+# history_output_pb_backup = history_output_pb
 
-for i in eachindex(history_input_pb)
-    deleteat!(history_input_pb[i].circles, unique(no_movement))
-    deleteat!(history_output_pb[i].circles, unique(no_movement))
-end
+# for i in eachindex(history_input_pb)
+#     deleteat!(history_input_pb[i].circles, unique(no_movement))
+#     deleteat!(history_output_pb[i].circles, unique(no_movement))
+# end
 
-N = N - length(unique(no_movement))
+# N = N - length(unique(no_movement))
 
-global jjj = 1
-for q in eachindex(history_input_pb)
-    global jjj = q
+
+
+for q in eachindex(single_input_pb)
 # for q in 1:2
     # q = 1
     # q = 2
     println("===Epoch No. $q starts===")
     if q ==1
-        global x_start = TDM_TRAJECTORY_opt.GreensPb_to_ALTRO(history_input_pb[q])
+        global x_start = TDM_TRAJECTORY_opt.GreensPb_to_ALTRO(single_input_pb[q])
     end
-    global x_final = TDM_TRAJECTORY_opt.GreensPb_to_ALTRO(history_output_pb[q])
+    global x_final = TDM_TRAJECTORY_opt.GreensPb_to_ALTRO(single_output_pb[q])
 
 
     global MAVs = Vector{TDM_TRAJECTORY_opt.Trajectory_Problem}()
@@ -102,11 +102,17 @@ for q in eachindex(history_input_pb)
         
         # Optimize if MAV has not converged to final position
         for i in 1:N
-            MAV = MAVs[i]
-            if TDM_TRAJECTORY_opt.converge(MAV) > 0.1
+            local MAV = MAVs[i]
+            if countIter == 1
                 global total_converge = false
                 t = TDM_TRAJECTORY_opt.optimize(MAV,hor,Nt,Nm,collision[i])
-                # push!(this_my_time[i],t)  #should be uncommented back
+            else
+                # println("We are here")
+                if TDM_TRAJECTORY_opt.converge(MAV) > 0.3
+                    global total_converge = false    # key!!!!
+                    t = TDM_TRAJECTORY_opt.optimize(MAV,hor,Nt,Nm,collision[i])
+                    # push!(this_my_time[i],t)  #should be uncommented back
+                end
             end
             println("Optimization for MAV no. $i"); # for testing
         end
@@ -165,7 +171,7 @@ for q in eachindex(history_input_pb)
 
     
 
-    junc_state=Vector{RBState}()
+    junc_state = Vector{RBState}()
     # junc_state = zeros(N,13)
     for i in 1:N
         # i = 1
@@ -204,9 +210,9 @@ end
 # display(p)
 
 
-plot()
-this_X = Xs[1]
-plot!(this_X[1][:,1],this_X[1][:,2],this_X[1][:,3])
+# plot()
+# this_X = Xs[1]
+# plot!(this_X[1][:,1],this_X[1][:,2],this_X[1][:,3])
 
 
 # Plot trajectories
@@ -216,7 +222,7 @@ using Plots
 # plot()
 p = plot()
 palette = ["blue", "orange", "green", "purple", "cyan", "pink", "gray", "olive"]
-scal = 160
+scal = 130
 
 
 # p=plot()
@@ -280,67 +286,74 @@ scal = 160
 
 # gif(anim,fps=10)
 
+pass_ = false
+if pass_
+    ## Plot 1(a): cylinder surface
+    using Plots
+    plotlyjs()
+
+    r = 100 + M*5
+    h = h_max
+    m, n =200, 200
+    u = range(0, 2pi, length=m)
+    v = range(0, h, length=n)
+    us = ones(m)*u'
+    vs = v*ones(n)'
+    #Surface parameterization
+    X = r*cos.(us)
+    Y = r*sin.(us)
+    Z = vs
+    p = plot(Plots.surface(X, Y, Z, size=(600,600), 
+        cbar=:none, 
+        legend=false,
+        colorscale="Reds",
+        linewidth=0.5, 
+        linealpha=0.4,
+        alpha=0.4, 
+        # linecolor=:red,
+        camera = (45, 10), 
+    ), label = "Domain")
 
 
-
-# using Plots
-# plotlyjs()
-
-# If x, y, z are vectors then it won't generate a surface
-# for a parameterized surface x,y,z should be matrices:
-# Check for: typeof(X), typeof(Y), typeof(Z)
-r = 100 + M*5
-h = h_max
-m, n =200, 200
-u = range(0, 2pi, length=m)
-v = range(0, h, length=n)
-us = ones(m)*u'
-vs = v*ones(n)'
-#Surface parameterization
-X = r*cos.(us)
-Y = r*sin.(us)
-Z = vs
-Plots.surface(X, Y, Z, size=(600,600), 
-    cbar=:none, 
-    legend=false,
-    colorscale="Reds",
-    linewidth=0.5, 
-    linealpha=0.4,
-    alpha=0.4, 
-    # linecolor=:red,
-    camera = (45, 10), 
-    )
-
-for j in eachindex(Xs)                         # epoch index
-    local this_X = Xs[j]
-    for i in 1:N                                # UAV index
-        local this_color = palette[mod1(i,length(palette))]
-        if j!= M
-            plot!(this_X[i][:,1],this_X[i][:,2],this_X[i][:,3],
-                linewidth = 2,
-                color = this_color, 
-                label=:none, 
-            )
-        else
-            plot!(this_X[i][:,1],this_X[i][:,2],this_X[i][:,3], 
-                linewidth = 2,
-                color = this_color,
-                label="UAV $i",
-                xlims=(-scal,scal), ylims=(-scal,scal), zlims=(0,30), 
-                xlabel="x [m]", xguidefontsize=15,
-                ylabel="y [m]", yguidefontsize=15,
-                zlabel="z [m]", zguidefontsize=15,
-                size=(800, 600),
-                camera=(45, 30),
-            )
+    # plot()
+    ## Plot 1(b): 3D trajectories for the all the UAVs
+    for j in eachindex(Xs)                         # epoch index
+        local this_X = Xs[j]
+        for i in 1:N                                # UAV index
+            local this_color = palette[mod1(i,length(palette))]
+            if j!= M
+                plot!(this_X[i][:,1],this_X[i][:,2],this_X[i][:,3],
+                    linewidth = 3,
+                    color = this_color, 
+                    label=:none, 
+                )
+            else
+                plot!(this_X[i][:,1],this_X[i][:,2],this_X[i][:,3], 
+                    linewidth = 3,
+                    color = this_color,
+                    label="UAV $i",
+                )
+            end
         end
     end
+    scal = r
+    plot!(grid = true, gridwidth = 3, 
+        legend=:outertopright,
+        legendfontsize=10,
+        xlims=(-scal,scal), ylims=(-scal,scal), zlims=(0,35),  
+        xlabel="x [m]", xguidefontsize=14, xticks = -scal+30:40:scal-30, xtickfontsize= 10,
+        ylabel="y [m]", yguidefontsize=14, yticks = -scal+30:40:scal-30,  ytickfontsize= 10,
+        zlabel="z [m]", zguidefontsize=14, zticks = 0:5:35, ztickfontsize= 10, zrotation = -90,
+        size=(800, 650),
+        camera=(1, 0),
+    )
+
 end
 
-plot!(grid = true, gridwidth = 3, legend=:topright,legendfontsize=10)
 
+ 
 
-Plots.savefig("3d_plot.pdf")
+# Plots.savefig("3d_plot.pdf")
 
 
 # TESTING......................

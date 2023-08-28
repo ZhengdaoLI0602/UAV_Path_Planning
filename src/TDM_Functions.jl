@@ -16,19 +16,17 @@ export Domains_Problem
 
 
 function show_epoch(circles, cir_domain)
-    # palette = ["blue", "orange", "green", "purple", "cyan", "pink", "gray", "olive"]
-    palette = ["blue", "orange", "green", "purple", "cyan"]
+    palette = ["blue", "orange", "green", "purple", "cyan", "pink", "gray", "olive"]
+    # palette = ["blue", "orange", "green", "purple", "cyan"]
     # number of color = number of UAV
     # this_cir_group = circles[1+(rnd-1)*N: rnd*N]
     for i in eachindex(circles)
         this_color = palette[mod1(i,length(palette))]
         this_cir = circles[i]
         x,y = Base_Functions.draw(this_cir, 0.0, 2*π)
-        plot!(x,y, aspect_ratio=1, color = this_color, label = "MAV $i", 
-        # xlims=(-30,30), ylims=(-30,30),
-        # legend=:topright 
-        # legend=:inside
-        legend=:outertopright
+        plot!(x,y, aspect_ratio=1, color = this_color, 
+            label = "UAV $i", 
+            linewidth = 1.2,
         )
     end
     
@@ -36,11 +34,9 @@ function show_epoch(circles, cir_domain)
         # Show the shape of domain
         domain_x, domain_y = Base_Functions.draw(cir_domain, 0.0, 2π)
         plot!(domain_x, domain_y,  aspect_ratio=1, color="red",label = "Domain",
+        linealpha=1.0, fillalpha=0.5,
         # xlims=(-30,30), ylims=(-30,30),
         linewidth = 5,
-        # legend=:topright
-        # legend=:inside
-        legend=:outertopright
         )
         
         # savefig("./circles_and_domain.pdf")
@@ -53,18 +49,7 @@ function show_coverage(circles, cir_domain, rnd, M, N)
     # palette = ["blue", "orange", "green", "purple", "cyan"]
     # number of color = number of UAV
     this_cir_group = circles[1+(rnd-1)*N: rnd*N]
-    for i in eachindex(this_cir_group)
-        this_color = palette[mod1(i,length(palette))]
-        this_cir = this_cir_group[i]
-        x, y = Base_Functions.draw(this_cir, 0.0, 2*π)
-        if rnd == 1 || show_coverage == false
-            plot!(x,y, aspect_ratio=1, color = this_color, label = "UAV $i", legend=:outertopright)
-        else
-            plot!(x,y, aspect_ratio=1, color = this_color, label =:none, legend=:outertopright)
-        end
-    end
-    
-    # if cir_domain !== nothing && rnd == M+1
+
     if cir_domain !== nothing 
         # Show the shape of domain
         domain_x, domain_y = Base_Functions.draw(cir_domain, 0.0, 2π)
@@ -79,20 +64,31 @@ function show_coverage(circles, cir_domain, rnd, M, N)
         alphas = range(start_alpha, stop= end_alpha, length=M+1)
 
         plot!(domain_x, domain_y, aspect_ratio=1, 
-            color="red",label = lb, 
-            xlims = (-155, 180),
-            ylims = (-155, 180),
+            color="red",label = lb,
             linealpha=alphas[rnd], fillalpha=0.5,
-            # legend=:outertopright,
-            legend=:topright,
-            legendfontsize=10, 
             linewidth = 5,
-            size=(600, 650),
-            xlabel="x [m]", xguidefontsize=15,
-            ylabel="y [m]", yguidefontsize=15
-            )
-        # savefig("./circles_and_domain.pdf")
+        )
     end
+
+    for i in eachindex(this_cir_group)
+        this_color = palette[mod1(i,length(palette))]
+        this_cir = this_cir_group[i]
+        x, y = Base_Functions.draw(this_cir, 0.0, 2*π)
+        if rnd == 1
+            plot!(x,y, aspect_ratio=1,
+            linewidth = 1.2, 
+            color = this_color, 
+            label = "UAV $i")
+        else
+            plot!(x,y, aspect_ratio=1,
+            linewidth = 1.2,  
+            color = this_color, 
+            label =:none)
+        end
+    end
+    
+    # if cir_domain !== nothing && rnd == M+1
+    
 end
 
 

@@ -94,26 +94,26 @@ function find_d_max(MAV, tf::Float64, Nf::Int64, d::Float64, sin_phi, cos_phi, s
     num_states = n
 
     # xf = SVector(MAV.StateHistory[end]); # however it is the given x0, 20230810
-    weight_Q = 5.0 #1e-10
-    weigth_R = 1.0 #1e-10
-    weigth_Qf = 1.0
-    # Q = Diagonal(@SVector fill(weight_Q, num_states))
-    Q = Diagonal(SA[weight_Q, weight_Q, weight_Q, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    weight_Q = 1.0 #1e-10
+    weigth_R = 4.0 #1e-10
+    weigth_Qf = 1e3
+    Q = Diagonal(@SVector fill(weight_Q, num_states))
+    # Q = Diagonal(SA[weight_Q, weight_Q, weight_Q, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
     R = Diagonal(@SVector fill(weigth_R, m))
-    # Qf = Diagonal(@SVector fill(weigth_Qf, num_states)) #xf: 0,0,0, Qf 1,1,1
-    Qf = Diagonal(SA[weigth_Qf, weigth_Qf, weigth_Qf, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) #xf: 0,0,0, Qf 1,1,1
+    Qf = Diagonal(@SVector fill(weigth_Qf, num_states)) #xf: 0,0,0, Qf 1,1,1
+    # Qf = Diagonal(SA[weigth_Qf, weigth_Qf, weigth_Qf, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) #xf: 0,0,0, Qf 1,1,1
 
 
     x0 = SVector(MAV.StateHistory[end])
-    # x0 = [-1.0, 1.0, 2.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
-    # xf = [x0[1]+ d*sin_phi*cos_theta, x0[2]+ d*sin_phi*sin_theta, x0[3]+ d*cos_phi, 
-    #       1.0, 0.0, 0.0, 0.0, 
-    #       0.0, 0.0, 0.0, 
-    #       0.0, 0.0, 0.0];
-    xf = [1.0, 1.0, 0.0, 
+    # x0 = [9.0, 8.0, 20.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    xf = [x0[1]+ d*sin_phi*cos_theta, x0[2]+ d*sin_phi*sin_theta, x0[3]+ d*cos_phi, 
           1.0, 0.0, 0.0, 0.0, 
           0.0, 0.0, 0.0, 
           0.0, 0.0, 0.0];
+    # xf = [1.0, 2.0, 3.0, 
+    #       1.0, 0.0, 0.0, 0.0, 
+    #       0.0, 0.0, 0.0, 
+    #       0.0, 0.0, 0.0];
 
     obj = LQRObjective(Q, R, Qf, xf, Nf)  # only about the 3D position
 
@@ -129,9 +129,9 @@ function find_d_max(MAV, tf::Float64, Nf::Int64, d::Float64, sin_phi, cos_phi, s
     # x_max = [1e4,1e4,100.0,  2.0,2.0,2.0,2.0,  1.5*10,1.5*10,1.5*10,  1.0*10,1.0*10,1.0*10]
 
 
-    x_min = [-100.0,-100.0,0.0,  -2.0,-2.0,-2.0,-2.0,  -5.0,-5.0,-5.0,  -1.5,-1.5,-1.5]
-    x_max = [100.0,100.0,100.0,  2.0,2.0,2.0,2.0,  5.0,5.0,5.0,  1.5,1.5,1.5]
-    add_constraint!(cons, BoundConstraint(n, m, x_min=x_min, x_max=x_max), 1:Nf)
+    x_min = [-100.0,-100.0,0.0,  -1.0,-1.0,-1.0,-1.0,  -2.0,-2.0,-2.0,  -1.5,-1.5,-1.5]
+    x_max = [100.0,100.0,100.0,  1.0,1.0,1.0,1.0,  2.0,2.0,2.0,  1.5,1.5,1.5]
+    add_constraint!(cons, BoundConstraint(n, m, x_min=x_min, x_max=x_max), 1:Nf-1)
 
 
     prob = Problem(MAV.Model, obj, x0, tf, xf=xf, constraints=cons);
@@ -159,7 +159,7 @@ function find_d_max(MAV, tf::Float64, Nf::Int64, d::Float64, sin_phi, cos_phi, s
 
     # opts = SolverOptions()
     # opts.cost_tolerance = 1e-5
-    solver = ALTROSolver(prob,show_summary=false);
+    solver = ALTROSolver(prob, show_summary=false);
 
     solve!(solver);
 
@@ -191,31 +191,44 @@ function optimize(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, Nm::Int64, co
     x0 = SVector(MAV.StateHistory[end])  # initial 3D positions of MAV
     xf = SVector(MAV.FinalState)         # final 3D positions of MAV(CONSTANT along the horizon)
 
-    n,m = size(MAV.Model) # n: number of states; m: number of control inputs
 
-    # Initialize cost function
-    Q = Diagonal(@SVector fill(5., n))  # form n*n diagonal matrix filled with the number 1
-    R = Diagonal(@SVector fill(1., m))  # form m*m diagonal matrix filled with the number 5
-    H = @SMatrix zeros(m, n)  # form m*n matrix
-    q = -Q*xf
-    r = @SVector zeros(m) # form m*1 vector
-    c = xf'*Q*xf/2
 
-    cost = QuadraticCost(Q, R, H, q, r, c)
+    # n,m = size(MAV.Model) # n: number of states; m: number of control inputs
+    # # Initialize cost function
+    # Q = Diagonal(@SVector fill(1., n))  # form n*n diagonal matrix filled with the number 1
+    # R = Diagonal(@SVector fill(4., m))  # form m*m diagonal matrix filled with the number 5
+    # H = @SMatrix zeros(m, n)  # form m*n matrix
+    # q = -Q*xf
+    # r = @SVector zeros(m) # form m*1 vector
+    # c = xf'*Q*xf/2
+    # cost = QuadraticCost(Q, R, H, q, r, c)
+    # objective = Objective(cost, Nt)
 
-    objective = Objective(cost, Nt)
+
+
+    n,m = size(MAV.Model)       # n: number of states 13; m: number of controls 4
+    num_states = n
+    # xf = SVector(MAV.StateHistory[end]); # however it is the given x0, 20230810
+    weight_Q = 1.0 #1e-10
+    weigth_R = 4.0 #1e-10
+    weigth_Qf = 20.0
+    Q = Diagonal(@SVector fill(weight_Q, num_states))
+    # Q = Diagonal(SA[weight_Q, weight_Q, weight_Q, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    R = Diagonal(@SVector fill(weigth_R, m))
+    Qf = Diagonal(@SVector fill(weigth_Qf, num_states)) #xf: 0,0,0, Qf 1,1,1
+    # Qf = Diagonal(SA[weigth_Qf, weigth_Qf, weigth_Qf, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) #xf: 0,0,0, Qf 1,1,1
+    objective = LQRObjective(Q, R, Qf, xf, Nt)  # only about the 3D position
+
+
+
 
     # Constraints
     cons = ConstraintList(n, m, Nt)
-
-    
-       
-
     # # modified after 2023.08.09
     # x_min = [-50.0,-50.0,0.0,  -2.0,-2.0,-2.0,-2.0,  -2.0,-2.0,-2.0,  -1.0,-1.0,-1.0]
     # x_max = [50.0,50.0, 100.0,  2.0,2.0,2.0,2.0,  2.0,2.0,2.0,  1.0,1.0,1.0]
-    x_min = [-150.0,-150.0,0.0,  -2.0,-2.0,-2.0,-2.0,  -5.0,-5.0,-5.0,  -1.5,-1.5,-1.5]
-    x_max = [150.0,150.0,30.0,  2.0,2.0,2.0,2.0,  5.0,5.0,5.0,  1.5,1.5,1.5]
+    x_min = [-200.0,-200.0,0.0,  -1.0,-1.0,-1.0,-1.0,  -2.0,-2.0,-2.0,  -1.5,-1.5,-1.5]
+    x_max = [200.0,200.0,50.0,  1.0,1.0,1.0,1.0,  2.0,2.0,2.0,  1.5,1.5,1.5]
 
 
     # x_min = [-100.0,-100.0,0.0,  -2.0,-2.0,-2.0,-2.0,  -5.0,-5.0,-5.0,  -1.5,-1.5,-1.5]
@@ -235,6 +248,8 @@ function optimize(MAV::Trajectory_Problem, tf::Float64, Nt::Int64, Nm::Int64, co
     
 
     add_constraint!(cons, BoundConstraint(n,m, x_min=x_min, x_max=x_max), 1:Nt-1)
+
+    # collision[1] = false  # just for test
 
     # Add collision constraints if present
     if collision[1] == true
