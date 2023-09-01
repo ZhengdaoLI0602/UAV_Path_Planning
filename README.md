@@ -5,6 +5,7 @@ Contact: Zhengdao LI (zl2822@ic.ac.uk), Department of Aeronautics, Imperial Coll
 
 
 # Relationship between the scripts (demonstrated in the Methodology of report)
+![Scripts_Hierarchy](https://github.com/ZhengdaoLI0602/UAV_Path_Planning/assets/80500317/b8f17488-0b54-4dd6-b4d8-a37dce73a0d0)
 
 
 
