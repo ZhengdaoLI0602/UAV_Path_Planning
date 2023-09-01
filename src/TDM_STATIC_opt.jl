@@ -1,3 +1,6 @@
+# Modified based on Logan's codes: https://github.com/Logan1904/FYP_Optimization
+
+
 module TDM_STATIC_opt
 
 using DirectSearch
@@ -95,16 +98,19 @@ function optimize(input, obj, cons_ext, cons_prog, N_iter, r_min, r_max, d_lim, 
 
 end
 
+
 """
     check(input,output,R_lim,domain_x,domain_y)
 
 Checks if any Circle objects are contained by other circles, and regenerates them (randomly)
 
 # Arguments:
-    - 'output': Concatenated vector of (x,y,R) values, obtained from MADS solver output
-    - 'R_lim': Radius limit on circles
-    - 'domain_x': x domain size
-    - 'domain_y': y domain size
+    - 'input': Pre-optimized circles
+    - 'output': The current solution of post-optimized circles 
+                (Concatenated vector of (x,y,R) values, obtained from MADS solver output)
+    - 'r_min': Minimum radius for detection circle
+    - 'r_max': Maximum radius for detection circle
+    - 'd_lim': displacement limit
 """
 function check(input, output, r_min, r_max, d_lim, circles_pool)
     input_circles = make_circles(input)
@@ -116,6 +122,7 @@ function check(input, output, r_min, r_max, d_lim, circles_pool)
     # is_pure_contained = Vector{Bool}([false for i in 1:N])
     no_movement = Vector{Bool}([false for i in 1:N])
 
+    # Should not contained by the other UAVs at current epoch
     for i in 1:N
         for j in i+1:N
             if contained(output_circles[i], output_circles[j]) == output_circles[i]
@@ -126,34 +133,21 @@ function check(input, output, r_min, r_max, d_lim, circles_pool)
         end
     end
 
+    # Should not contained by the detection cirlce of same UAV at previous epoch
     for i in 1:N
-        # for j in i+1:N
         if output_circles[i].R<=input_circles[i].R || 
             (output_circles[i].x==input_circles[i].x && output_circles[i].y==input_circles[i].y)
             no_movement[i] = true
         end
-        # end
     end
 
-    # for i in eachindex(output_circles)
-    #     if Base_Functions.pure_contained(output_circles[i], input_circles[i]) !== nothing
-    #         # Base_Functions.pure_contained(pre_optimized_circles[i], this_group[i]) !== nothing
-    #         # return false
-    #         is_pure_contained[i] = true
-    #     end
-    # end
 
     if any(is_contained) || any(no_movement)
-    # if any(is_contained)
         println("is_contained: ",is_contained)
         println("no_movement: ",no_movement)
-        # println("is_pure_contained: ",is_pure_contained)
-        # allowed_displacement = 1
         global FOV = 80 /180 *pi
         for i in 1:N
-            # if circle is contained, regenerate it (randomly)
             if is_contained[i] == true || no_movement[i] == true 
-                # # variation = - allowed_displacement/2 + allowed_displacement*rand()
 
                 global success = true
                 for angle in 1:1:360
@@ -186,7 +180,6 @@ function check(input, output, r_min, r_max, d_lim, circles_pool)
 
                 if success == false
                     println("Reallocate fail! Interpolate ourwards!")
-                    # direction = [output[i], output[N+i], output[2*N+i]/tan(FOV/2)]/sqrt(output[i]^2+output[N+i]^2+(output[2*N+i]/tan(FOV/2))^2)
                     direction = [output[i], output[N+i], output[2*N+i]/tan(FOV/2)]/sqrt((output[i])^2 + (output[N+i])^2+ (output[2*N+i]/tan(FOV/2))^2)
                     increment = d_lim *direction
 

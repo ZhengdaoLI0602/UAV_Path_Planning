@@ -1,11 +1,11 @@
+# Modified based on Logan's codes: https://github.com/Logan1904/FYP_Optimization
+
 module TDM_Functions
-include("../../FYP_Optimization-main/Base_Functions.jl")
+include("FYP_Optimization-main/Base_Functions.jl")
 using Plots
-using .Base_Functions
 plotlyjs()
 Plots.default(show = true)
 using Random
-# Random.seed!(111)
 
 
 export show_circles
@@ -17,9 +17,6 @@ export Domains_Problem
 
 function show_epoch(circles, cir_domain)
     palette = ["blue", "orange", "green", "purple", "cyan", "pink", "gray", "olive"]
-    # palette = ["blue", "orange", "green", "purple", "cyan"]
-    # number of color = number of UAV
-    # this_cir_group = circles[1+(rnd-1)*N: rnd*N]
     for i in eachindex(circles)
         this_color = palette[mod1(i,length(palette))]
         this_cir = circles[i]
@@ -39,15 +36,12 @@ function show_epoch(circles, cir_domain)
         linewidth = 5,
         )
         
-        # savefig("./circles_and_domain.pdf")
     end
 end
 
 
 function show_coverage(circles, cir_domain, rnd, M, N)
     palette = ["blue", "orange", "green", "purple", "cyan", "pink", "gray", "olive"]
-    # palette = ["blue", "orange", "green", "purple", "cyan"]
-    # number of color = number of UAV
     this_cir_group = circles[1+(rnd-1)*N: rnd*N]
 
     if cir_domain !== nothing 
@@ -87,8 +81,6 @@ function show_coverage(circles, cir_domain, rnd, M, N)
         end
     end
     
-    # if cir_domain !== nothing && rnd == M+1
-    
 end
 
 
@@ -121,7 +113,6 @@ function allocate_random_circles(cir_domain, N, r_max)
         
         x = ref_dis * cos(ref_angle)
         y = ref_dis * sin(ref_angle)
-        # r = min((this_domain.R - ref_dis),r_max) * rand()
         r = 1 + 10 * rand()
         
         push!(x_arr,x)
@@ -141,9 +132,7 @@ function allocate_even_circles(r_centering_cir::Float64, N, r_uav::Float64)
     r_arr = Vector{Float64}(undef,0)
 
     for i in 1:N
-        # NOTE: A * rand() -> return float values in [0, A]
 
-        # ref_dis = this_domain.R *rand()
         ref_angle = 2*π/N * (i-1)
         
         x = r_centering_cir * cos(ref_angle)
@@ -180,12 +169,6 @@ mutable struct Domains_Problem
         this.Expand_rate = Expand_rate
 
         this.domain_expand = function ()
-            # for i in 1: this.Total_epochs
-            #     this_R = rate_R * (i-1) + ini_R
-            #     push!(this.Domain_History, Circle(0,0, this_R,[],[]))
-            #     println("At time $i, Domain Radius: $(this.Domain_History[i].R); Area: $(this.domain_area(this.Domain_History[i])) at (0, 0)")
-            #     sleep(1)
-            # end
             this.Radius = this.Radius + this.Expand_rate
             push!(this.Domain_History, Circle(0,0, this.Radius,[],[]))
         end

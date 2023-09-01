@@ -1,3 +1,5 @@
+# Modified based on Logan's codes: https://github.com/Logan1904/FYP_Optimization
+
 include("TDM_Functions.jl")
 include("TDM_Trajectory_Opt.jl")
 
@@ -36,18 +38,6 @@ tf = hor            # for testing on 20230809
 # NO_PROGRESS = 8
 # COST_INCREASE = 9
 
-# cir_domain = TDM_Functions.Domains_Problem([], 20.0, 2.0) # 
-# global MADS_input = TDM_Functions.allocate_random_circles(cir_domain, N, r_max) # may be recovered 20230814
-# x_start = TDM_TRAJECTORY_opt.MADS_to_ALTRO(MADS_input)                         # may be recovered 20230814
-
-
-# x_start_4test = RBState([-7.77469514777312, 0.7173085987290898, 7.545026699377439, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-# MAVs = Vector{TDM_TRAJECTORY_opt.Trajectory_Problem}() # ----- testing on just first UAV on 0802
-# for i in 1:N
-#     push!(MAVs, TDM_TRAJECTORY_opt.Trajectory_Problem(mass, J, gravity, motor_dist, kf, km, x_start[i]))
-#     # push!(MAVs, TDM_TRAJECTORY_opt.Trajectory_Problem(mass, J, gravity, motor_dist, kf, km, x_start_4test)) # test on 20230810
-# end
-
 
 include("TDM_Trajectory_Opt.jl")
 
@@ -60,7 +50,7 @@ global sin_phi, cos_phi, sin_theta, cos_theta = √2/√3, 1/√3, √2/2, √2/
 # global sin_phi, cos_phi, sin_theta, cos_theta = 0, 1, √2/2, √2/2 #sind(phi), cosd(phi), sind(theta), cosd(theta)
 
 
-for ind in 1:8
+for ind in 1:8  # number of tests to find ̄d
     # I. Starting point
     # x_start_dBar = RBState([0.0,0.0,0.0,  1.0,0.0,0.0,0.0,  0.0,0.0,0.0,  0.0,0.0,0.0])
 
@@ -77,14 +67,8 @@ for ind in 1:8
         local X, x0, xf, solver_dBar, prob_dBar, obj_dBar = TDM_TRAJECTORY_opt.find_d_max(MAV, hor, Nf, d, sin_phi, cos_phi, sin_theta, cos_theta); 
         println(" Distance: $d; Solver status: ", solver_dBar.stats.status)
         if Int(solver_dBar.stats.status) != 2   
-            # X, solver_dBar, prob_dBar, obj_dBar = TDM_TRAJECTORY_opt.find_d_max(MAV, hor, Nf, d+0.1, sin_phi, cos_phi, cos_theta, sin_theta);  
-            # if Int(solver_dBar.stats.status) != 2  
-                # Not successful
-                # global critical_dis[ind, 1] = d-0.1  
             global critical_dis = d-0.5 
-                # The previous trial of d is the last d makes problem converge
             break
-            # end
         end
     end
 
@@ -112,34 +96,9 @@ for ind in 1:8
 end
 
 
+# Store the records of tests on displacement limit
 using DelimitedFiles
-writedlm("Positions_store_1.csv", positions_stores, ", ")
-
-# include("TDM_Functions.jl")
-# include("TDM_Trajectory_Opt.jl")
-# x_start_dBar = RBState([0.0,0.0,0.0,  1.0,0.0,0.0,0.0,  0.0,0.0,0.0,  0.0,0.0,0.0])
-# # x_start_dBar = RBState([5.0*rand()*rand([-1 1]),5.0*rand()*rand([-1 1]),5.0*rand(),  1.0,0.0,0.0,0.0,  0.0,0.0,0.0,  0.0,0.0,0.0])
-# MAV = TDM_TRAJECTORY_opt.Trajectory_Problem(mass, J, gravity, motor_dist, kf, km, x_start_dBar)
-# sin_phi, cos_phi, sin_theta, cos_theta = √2/√3, 1/√3, √2/2, √2/2 #sind(phi), cosd(phi), sind(theta), cosd(theta)
-# # global sin_phi, cos_phi, sin_theta, cos_theta = 1, 0, √2/2, √2/2 #sind(phi), cosd(phi), sind(theta), cosd(theta)
-
-# X, x0, xf, solver_dBar, prob_dBar, obj_dBar = TDM_TRAJECTORY_opt.find_d_max(MAV, hor, Nf, 12.3, sin_phi, cos_phi,  sin_theta, cos_theta); 
-# println("Chosen starting point: $(x0[1:3])")
-# println("Chosen destination: $(xf[1:3])")
-# println(" Distance: $critical_dis; Solver status: ", solver_dBar.stats.status)
-
-# # Document the data and make plots
-# traj_s= []
-# traj = zeros(Nf, 3) # local in for loop
-# for i in eachindex(X)
-#     traj[i,1] = X[i][1]
-#     traj[i,2] = X[i][2]
-#     traj[i,3] = X[i][3]
-# end
-# push!(traj_s, traj)
-
-
-
+writedlm("Positions_stored.csv", positions_stores, ", ")
 
 
 using Plots
@@ -148,19 +107,13 @@ p = plot()
 global palette = ["blue", "orange", "green", "purple", "cyan", "pink", "gray", "olive"]
 scal = 10
 global line_num = 0
-for ind in 1:5 #eachindex(traj_s)
-    # if ind == 3
-    #     continue
-    # end
-    # line_num += 1
+for ind in eachindex(traj_s)
     this_traj = traj_s[ind]
     this_color = palette[mod1(ind, length(palette))]
     plot!(this_traj[:,1], this_traj[:,2], this_traj[:,3],
         linewidth = 3,
         color = this_color, 
         label="Test $ind",
-        # aspect_ratio=1, 
-        # aspectmode="cube",
         xlims=(-scal,scal), ylims=(-scal,scal), zlims=(0,12),
         xlabel="x [m]", xguidefontsize=15, xticks = [-12, -8, -4, 0, 4, 8, 12], xtickfontsize= 10, 
         ylabel="y [m]", yguidefontsize=15, yticks = -12:4:12,  ytickfontsize= 10, 
@@ -172,8 +125,6 @@ end
 plot!(grid = true, gridwidth = 3,legend=:topright, legendfontsize=12)
 
 
-
-Plots.savefig(p,"Step1.png")
 
 
 # Document all the calculations on dBar
