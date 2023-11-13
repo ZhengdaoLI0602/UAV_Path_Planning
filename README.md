@@ -1,6 +1,7 @@
 # UAV_Path_Planning
 This is the Repository for MSc Individual Project titled: Distributed Numerical Optimization For Trajectory
 Planning Of UAVs
+
 Contact: Zhengdao LI (zl2822@ic.ac.uk), Department of Aeronautics, Imperial College London
 
 
